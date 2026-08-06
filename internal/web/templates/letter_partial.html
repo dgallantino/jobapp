@@ -1,0 +1,6 @@
+{{define "letter_partial"}}
+<div class="letter">
+  <p class="muted">{{.Model}} · {{.CreatedAt.Format "2006-01-02 15:04"}}</p>
+  {{.Content}}
+</div>
+{{end}}

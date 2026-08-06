@@ -1,0 +1,13 @@
+{{define "title"}}Profile · jobapp{{end}}
+{{define "content"}}
+<h1>Profile</h1>
+<p class="muted">Key/value fields used when generating cover letters. Layout is a stub until fields stabilize.</p>
+{{if .Saved}}<p class="muted">Saved.</p>{{end}}
+<form method="post" action="/profile" class="stack">
+  {{range .Entries}}
+  <label for="f-{{.Key}}">{{.Key}}</label>
+  <textarea id="f-{{.Key}}" name="{{.Key}}">{{.Value}}</textarea>
+  {{end}}
+  <button type="submit">Save profile</button>
+</form>
+{{end}}

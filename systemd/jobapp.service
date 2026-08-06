@@ -1,0 +1,20 @@
+[Unit]
+Description=jobapp web UI (socket-activated)
+Documentation=file:///opt/jobapp/README.md
+Requires=jobapp.socket
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/jobapp
+EnvironmentFile=-/opt/jobapp/.env
+ExecStart=/opt/jobapp/jobapp serve -db /opt/jobapp/jobs.db
+Restart=on-failure
+RestartSec=2
+
+# Runs only when traffic arrives on the socket (socket activation).
+# No User= set here so you can choose a dedicated account at install time.
+
+[Install]
+WantedBy=multi-user.target
+Also=jobapp.socket

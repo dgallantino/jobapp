@@ -1,0 +1,19 @@
+# Binaries
+/jobapp
+/build/
+*.exe
+*.test
+*.out
+
+# Runtime / secrets
+*.db
+*.db-*
+.env
+
+# IDE / OS
+.idea/
+.vscode/*
+*.swp
+*~
+.DS_Store
+

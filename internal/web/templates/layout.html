@@ -1,0 +1,31 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{block "title" .}}jobapp{{end}}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <div class="wrap">
+    {{if .Authed}}
+    <header class="appbar">
+      <a class="brand" href="/">jobapp</a>
+      <nav>
+        <a href="/">Jobs</a>
+        <a href="/profile">Profile</a>
+        <a href="/sources">Sources</a>
+      </nav>
+      <span class="spacer"></span>
+      <form method="post" action="/logout" class="inline-form">
+        <button type="submit" class="secondary">Log out</button>
+      </form>
+    </header>
+    {{end}}
+    {{block "content" .}}{{end}}
+  </div>
+</body>
+</html>
+{{end}}

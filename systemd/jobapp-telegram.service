@@ -1,0 +1,12 @@
+[Unit]
+Description=jobapp telegram-check (one-shot short-poll)
+Documentation=file:///opt/jobapp/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/jobapp
+EnvironmentFile=-/opt/jobapp/.env
+ExecStart=/opt/jobapp/jobapp telegram-check -db /opt/jobapp/jobs.db
+Nice=10

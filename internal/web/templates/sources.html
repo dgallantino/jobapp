@@ -1,0 +1,47 @@
+{{define "title"}}Sources · jobapp{{end}}
+{{define "content"}}
+<h1>Sources</h1>
+<p class="muted">Crawl targets. Adapter must match a registered scraper (<code>static</code>, <code>jobstreet</code>, <code>glints</code>).</p>
+
+<ul class="source-list">
+  {{range .Sources}}
+  <li>
+    <div class="row">
+      <div>
+        <strong>{{.Name}}</strong>
+        {{if .Enabled}}<span class="badge">enabled</span>{{else}}<span class="badge off">disabled</span>{{end}}
+        <div class="muted">{{.URL}}</div>
+        <div class="muted">adapter: {{.Adapter}}</div>
+      </div>
+      <div>
+        <a href="/sources/{{.ID}}/edit">Edit</a>
+        <form method="post" action="/sources/{{.ID}}/delete" class="inline-form" onsubmit="return confirm('Delete this source?');">
+          <button type="submit" class="danger">Delete</button>
+        </form>
+      </div>
+    </div>
+  </li>
+  {{else}}
+  <li class="muted">No sources configured.</li>
+  {{end}}
+</ul>
+
+<h2>Add source</h2>
+<form method="post" action="/sources" class="stack">
+  <label for="name">Name</label>
+  <input id="name" name="name" type="text" required>
+  <label for="url">Listing URL</label>
+  <input id="url" name="url" type="url" required>
+  <label for="adapter">Adapter</label>
+  <select id="adapter" name="adapter">
+    <option value="static">static</option>
+    <option value="jobstreet">jobstreet</option>
+    <option value="glints">glints</option>
+  </select>
+  <div class="checkbox-row">
+    <input id="enabled" name="enabled" type="checkbox" value="1" checked>
+    <label for="enabled">Enabled</label>
+  </div>
+  <button type="submit">Add source</button>
+</form>
+{{end}}

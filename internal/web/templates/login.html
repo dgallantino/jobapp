@@ -1,0 +1,13 @@
+{{define "title"}}Login · jobapp{{end}}
+{{define "content"}}
+<div class="login-box">
+  <h1>jobapp</h1>
+  <p class="muted">Single-user access. Enter the site password.</p>
+  {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+  <form method="post" action="/login">
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" required autofocus>
+    <button type="submit">Sign in</button>
+  </form>
+</div>
+{{end}}

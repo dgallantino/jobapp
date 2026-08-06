@@ -1,0 +1,36 @@
+{{define "title"}}{{.Job.Title}} · jobapp{{end}}
+{{define "content"}}
+<p class="muted"><a href="/">← Jobs</a></p>
+<h1>{{.Job.Title}}</h1>
+<div class="detail-meta">
+  <div><strong>Company:</strong> {{.Job.Company}}</div>
+  <div><strong>Source:</strong> {{.Job.SourceName}}</div>
+  <div><strong>URL:</strong> <a href="{{.Job.SourceURL}}" rel="noopener noreferrer" target="_blank">{{.Job.SourceURL}}</a></div>
+  <div>
+    <strong>Status:</strong>
+    <span id="job-status">
+      {{template "status_cell" .Job}}
+    </span>
+  </div>
+</div>
+
+<h2>Description</h2>
+<div class="job-body">{{.Job.Description}}</div>
+
+<h2>Cover letter</h2>
+<button
+  hx-post="/jobs/{{.Job.ID}}/cover-letter"
+  hx-target="#letters"
+  hx-swap="afterbegin"
+  hx-disabled-elt="this">
+  Generate cover letter
+</button>
+<div id="letters">
+  {{range .Letters}}
+  <div class="letter">
+    <p class="muted">{{.Model}} · {{.CreatedAt.Format "2006-01-02 15:04"}}</p>
+    {{.Content}}
+  </div>
+  {{end}}
+</div>
+{{end}}

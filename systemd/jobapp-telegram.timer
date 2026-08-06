@@ -1,0 +1,14 @@
+[Unit]
+Description=Run jobapp telegram-check on a schedule
+Documentation=file:///opt/jobapp/README.md
+
+[Timer]
+# Default: every 5 minutes. Change OnCalendar to adjust, e.g.:
+#   OnCalendar=*-*-* *:0/1:00    # every minute
+#   OnCalendar=*-*-* *:0/10:00   # every 10 minutes
+OnCalendar=*-*-* *:0/5:00
+Persistent=true
+RandomizedDelaySec=15
+
+[Install]
+WantedBy=timers.target

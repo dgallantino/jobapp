@@ -1,0 +1,13 @@
+{{define "status_cell"}}
+<form class="status-form"
+      hx-patch="/jobs/{{.ID}}/status"
+      hx-target="this"
+      hx-swap="outerHTML">
+  <select name="status" onchange="this.form.requestSubmit()">
+    <option value="new" {{if eq .Status "new"}}selected{{end}}>new</option>
+    <option value="applied" {{if eq .Status "applied"}}selected{{end}}>applied</option>
+    <option value="rejected" {{if eq .Status "rejected"}}selected{{end}}>rejected</option>
+    <option value="ignored" {{if eq .Status "ignored"}}selected{{end}}>ignored</option>
+  </select>
+</form>
+{{end}}

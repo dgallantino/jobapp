@@ -1,0 +1,23 @@
+{{define "title"}}Edit source · jobapp{{end}}
+{{define "content"}}
+<p class="muted"><a href="/sources">← Sources</a></p>
+<h1>Edit source</h1>
+<form method="post" action="/sources/{{.Source.ID}}" class="stack">
+  <label for="name">Name</label>
+  <input id="name" name="name" type="text" value="{{.Source.Name}}" required>
+  <label for="url">Listing URL</label>
+  <input id="url" name="url" type="url" value="{{.Source.URL}}" required>
+  <label for="adapter">Adapter</label>
+  <select id="adapter" name="adapter">
+    <option value="static" {{if eq .Source.Adapter "static"}}selected{{end}}>static</option>
+    <option value="jobstreet" {{if eq .Source.Adapter "jobstreet"}}selected{{end}}>jobstreet</option>
+    <option value="glints" {{if eq .Source.Adapter "glints"}}selected{{end}}>glints</option>
+    <option value="telegram" {{if eq .Source.Adapter "telegram"}}selected{{end}}>telegram</option>
+  </select>
+  <div class="checkbox-row">
+    <input id="enabled" name="enabled" type="checkbox" value="1" {{if .Source.Enabled}}checked{{end}}>
+    <label for="enabled">Enabled</label>
+  </div>
+  <button type="submit">Save</button>
+</form>
+{{end}}

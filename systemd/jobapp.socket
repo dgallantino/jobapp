@@ -1,0 +1,12 @@
+[Unit]
+Description=jobapp web UI socket
+Documentation=file:///opt/jobapp/README.md
+
+[Socket]
+ListenStream=8080
+# Prefer binding to a Tailscale IP in production, e.g.:
+# ListenStream=100.x.y.z:8080
+Accept=no
+
+[Install]
+WantedBy=sockets.target

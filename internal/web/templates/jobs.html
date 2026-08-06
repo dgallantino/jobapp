@@ -1,0 +1,37 @@
+{{define "title"}}Jobs · jobapp{{end}}
+{{define "content"}}
+<h1>Job ads</h1>
+<div class="filters">
+  <a href="/" class="{{if eq .Status ""}}active{{end}}">All</a>
+  <a href="/?status=new" class="{{if eq .Status "new"}}active{{end}}">New</a>
+  <a href="/?status=applied" class="{{if eq .Status "applied"}}active{{end}}">Applied</a>
+  <a href="/?status=rejected" class="{{if eq .Status "rejected"}}active{{end}}">Rejected</a>
+  <a href="/?status=ignored" class="{{if eq .Status "ignored"}}active{{end}}">Ignored</a>
+</div>
+{{if not .Jobs}}
+<p class="muted">No job ads yet. Add a source and run <code>jobapp crawl</code>.</p>
+{{else}}
+<table>
+  <thead>
+    <tr>
+      <th>Title</th>
+      <th>Company</th>
+      <th>Source</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Jobs}}
+    <tr>
+      <td><a href="/jobs/{{.ID}}">{{.Title}}</a></td>
+      <td>{{.Company}}</td>
+      <td>{{.SourceName}}</td>
+      <td>
+        {{template "status_cell" .}}
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}
+{{end}}
