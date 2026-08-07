@@ -54,6 +54,11 @@ Commands:
   crawl            One crawl pass over enabled sources, then exit
   telegram-check   One Telegram short-poll pass, then exit
 
+Serve flags:
+  -listen ADDR         Listen address when not socket-activated (default :8080)
+  -db PATH             SQLite database path
+  -idle-timeout DUR    Exit after idle duration (0 disables; e.g. 5m)
+
 `)
 }
 
@@ -61,6 +66,7 @@ func runServe(cfg config.Config, args []string) int {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	listen := fs.String("listen", cfg.ListenAddr, "listen address when not socket-activated (e.g. :8080)")
 	dbPath := fs.String("db", cfg.DBPath, "SQLite database path")
+	idleTimeout := fs.Duration("idle-timeout", 0, "exit after this idle duration (0 disables)")
 	_ = fs.Parse(args)
 
 	if cfg.SitePasswordHash == "" {
@@ -81,7 +87,7 @@ func runServe(cfg config.Config, args []string) int {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := srv.ListenAndServe(*listen); err != nil {
+	if err := srv.ListenAndServe(*listen, *idleTimeout); err != nil {
 		log.Fatal(err)
 	}
 	return 0
