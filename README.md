@@ -12,6 +12,14 @@ jobapp telegram-check   # one Telegram short-poll pass, then exit
 
 ## Build
 
+For deploy, use the Makefile (output: `build/jobapp`):
+
+```bash
+make build
+```
+
+Quick local build:
+
 ```bash
 go build -o jobapp ./cmd/jobapp
 ```
@@ -21,14 +29,12 @@ No npm/node. htmx is vendored under `internal/web/static/htmx.min.js`.
 ## Local development
 
 ```bash
-cp .env.example .env
-# fill JOBAPP_PASSWORD_HASH, JOBAPP_SESSION_SECRET (and optionally OpenRouter/Telegram)
+./scripts/configure.sh
+# fill remaining secrets in .env (OpenRouter, Telegram, etc.)
 
-# Generate a bcrypt password hash (example):
-go run ./scripts/hashpassword YOUR_PASSWORD
-
-# Generate a session secret:
-openssl rand -hex 32
+# Or manually: cp .env.example .env, then:
+#   go run ./scripts/hashpassword YOUR_PASSWORD
+#   openssl rand -hex 32
 
 set -a && source .env && set +a
 ./jobapp serve -listen :8080 -db ./jobs.db
@@ -48,6 +54,32 @@ Open `http://127.0.0.1:8080`, sign in, add crawl sources under **Sources**, then
 ├── jobs.db     # created on first run
 └── .env        # secrets (mode 600)
 ```
+
+### Automatic install
+
+```bash
+./scripts/configure.sh          # creates ./.env (mode 600); prompts for site password
+# edit ./.env — add OpenRouter / Telegram secrets
+
+make build
+sudo make install               # /opt/jobapp/jobapp, /opt/jobapp/.env, systemd units + daemon-reload
+sudo make enable                # jobapp.socket + crawl/telegram timers
+```
+
+| Step | Effect |
+|------|--------|
+| `configure.sh` | Copies `.env.example` → `.env`, sets `JOBAPP_SESSION_SECRET` and `JOBAPP_PASSWORD_HASH` |
+| `make build` | Builds `build/jobapp` (incremental via timestamps) |
+| `sudo make install` | Installs binary + `.env` to `PREFIX` (`/opt/jobapp` by default), installs units to `/etc/systemd/system/`, runs `daemon-reload` |
+| `sudo make enable` | `systemctl enable --now` for socket + both timers |
+
+`configure.sh` accepts a path — e.g. `sudo ./scripts/configure.sh /opt/jobapp/.env` — if you want secrets created directly at the install location.
+
+Other Makefile targets: `make disable`, `sudo make uninstall`, `make clean`.
+
+### Manual install
+
+If you are not using the Makefile:
 
 1. Build and copy the binary to `/opt/jobapp/jobapp`.
 2. Copy `.env.example` → `/opt/jobapp/.env` and fill secrets.
