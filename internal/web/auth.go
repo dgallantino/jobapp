@@ -2,8 +2,10 @@ package web
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -15,7 +17,16 @@ import (
 const sessionCookie = "jobapp_session"
 
 type sessionPayload struct {
-	Exp int64 `json:"exp"`
+	Exp      int64  `json:"exp"`
+	Instance string `json:"iid"`
+}
+
+func newSessionInstance() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func (s *Server) checkPassword(password string) bool {
@@ -26,7 +37,10 @@ func (s *Server) checkPassword(password string) bool {
 }
 
 func (s *Server) setSession(w http.ResponseWriter) error {
-	payload := sessionPayload{Exp: time.Now().Add(30 * 24 * time.Hour).Unix()}
+	payload := sessionPayload{
+		Exp:      time.Now().Add(30 * 24 * time.Hour).Unix(),
+		Instance: s.sessionInstance,
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -76,6 +90,9 @@ func (s *Server) validSession(r *http.Request) bool {
 	}
 	var payload sessionPayload
 	if err := json.Unmarshal(raw, &payload); err != nil {
+		return false
+	}
+	if payload.Instance == "" || payload.Instance != s.sessionInstance {
 		return false
 	}
 	return time.Now().Unix() < payload.Exp

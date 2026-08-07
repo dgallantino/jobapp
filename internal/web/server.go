@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"fmt"
@@ -9,8 +10,12 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/coreos/go-systemd/v22/activation"
@@ -24,12 +29,14 @@ var assets embed.FS
 
 // Server is the HTTP frontend.
 type Server struct {
-	DB           *sql.DB
-	PasswordHash string
-	SessionSecret string
-	LLM          *llm.Client
-	templates    map[string]*template.Template
-	static       http.Handler
+	DB              *sql.DB
+	PasswordHash    string
+	SessionSecret   string
+	LLM             *llm.Client
+	templates       map[string]*template.Template
+	static          http.Handler
+	sessionInstance string
+	lastActivity    atomic.Int64 // unix nanos
 }
 
 // New constructs a Server.
@@ -37,22 +44,43 @@ func New(db *sql.DB, passwordHash, sessionSecret string, llmClient *llm.Client) 
 	if sessionSecret == "" {
 		return nil, fmt.Errorf("JOBAPP_SESSION_SECRET is required for serve")
 	}
+	instance, err := newSessionInstance()
+	if err != nil {
+		return nil, fmt.Errorf("session instance: %w", err)
+	}
 	staticFS, err := fs.Sub(assets, "static")
 	if err != nil {
 		return nil, err
 	}
 	s := &Server{
-		DB:            db,
-		PasswordHash:  passwordHash,
-		SessionSecret: sessionSecret,
-		LLM:           llmClient,
-		templates:     map[string]*template.Template{},
-		static:        http.FileServer(http.FS(staticFS)),
+		DB:              db,
+		PasswordHash:    passwordHash,
+		SessionSecret:   sessionSecret,
+		LLM:             llmClient,
+		templates:       map[string]*template.Template{},
+		static:          http.FileServer(http.FS(staticFS)),
+		sessionInstance: instance,
 	}
+	s.touchActivity()
 	if err := s.parseTemplates(); err != nil {
 		return nil, err
 	}
 	return s, nil
+}
+
+func (s *Server) touchActivity() {
+	s.lastActivity.Store(time.Now().UnixNano())
+}
+
+func (s *Server) lastActivityAt() time.Time {
+	return time.Unix(0, s.lastActivity.Load())
+}
+
+func (s *Server) trackActivity(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.touchActivity()
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) parseTemplates() error {
@@ -124,28 +152,78 @@ func (s *Server) routes() http.Handler {
 
 // ListenAndServe starts the server using systemd socket activation if available,
 // otherwise listens on listenAddr (e.g. ":8080").
-func (s *Server) ListenAndServe(listenAddr string) error {
-	handler := s.routes()
+// If idleTimeout > 0, the process shuts down gracefully after that much inactivity.
+func (s *Server) ListenAndServe(listenAddr string, idleTimeout time.Duration) error {
+	handler := s.trackActivity(s.routes())
 
 	listeners, err := activation.Listeners()
 	if err != nil {
 		return fmt.Errorf("systemd activation: %w", err)
 	}
+
+	var ln net.Listener
 	if len(listeners) > 0 {
-		ln := listeners[0]
+		ln = listeners[0]
 		log.Printf("serving (socket-activated) on %s", ln.Addr())
-		return http.Serve(ln, handler)
+	} else {
+		if listenAddr == "" {
+			listenAddr = ":8080"
+		}
+		ln, err = net.Listen("tcp", listenAddr)
+		if err != nil {
+			return err
+		}
+		log.Printf("serving on http://%s", ln.Addr())
+	}
+	if idleTimeout > 0 {
+		log.Printf("idle timeout %s", idleTimeout)
 	}
 
-	if listenAddr == "" {
-		listenAddr = ":8080"
+	httpSrv := &http.Server{Handler: handler}
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- httpSrv.Serve(ln)
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	var ticker *time.Ticker
+	var idleCh <-chan time.Time
+	if idleTimeout > 0 {
+		ticker = time.NewTicker(time.Second)
+		defer ticker.Stop()
+		idleCh = ticker.C
 	}
-	ln, err := net.Listen("tcp", listenAddr)
-	if err != nil {
-		return err
+
+	for {
+		select {
+		case err := <-errCh:
+			if err == nil || err == http.ErrServerClosed {
+				return nil
+			}
+			return err
+		case sig := <-sigCh:
+			log.Printf("received %v, shutting down", sig)
+			return shutdownHTTP(httpSrv)
+		case <-idleCh:
+			if time.Since(s.lastActivityAt()) >= idleTimeout {
+				log.Printf("idle for %s, shutting down", idleTimeout)
+				return shutdownHTTP(httpSrv)
+			}
+		}
 	}
-	log.Printf("serving on http://%s", ln.Addr())
-	return http.Serve(ln, handler)
+}
+
+func shutdownHTTP(httpSrv *http.Server) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := httpSrv.Shutdown(ctx); err != nil {
+		_ = httpSrv.Close()
+		return fmt.Errorf("shutdown: %w", err)
+	}
+	return nil
 }
 
 func (s *Server) handleLoginGet(w http.ResponseWriter, r *http.Request) {

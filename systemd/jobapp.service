@@ -8,7 +8,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/opt/jobapp
 EnvironmentFile=-/opt/jobapp/.env
-ExecStart=/opt/jobapp/jobapp serve -db /opt/jobapp/jobs.db
+ExecStart=/opt/jobapp/jobapp serve -db /opt/jobapp/jobs.db -idle-timeout 5m
 Restart=on-failure
 RestartSec=2
 

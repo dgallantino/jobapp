@@ -32,6 +32,8 @@ openssl rand -hex 32
 
 set -a && source .env && set +a
 ./jobapp serve -listen :8080 -db ./jobs.db
+# Optional: exit after idle (default off). Production unit uses -idle-timeout 5m.
+# ./jobapp serve -listen :8080 -db ./jobs.db -idle-timeout 5m
 ```
 
 Open `http://127.0.0.1:8080`, sign in, add crawl sources under **Sources**, then:
@@ -62,6 +64,8 @@ sudo systemctl enable --now jobapp-telegram.timer
 ```
 
 Socket activation: systemd listens on the port in `jobapp.socket`; `jobapp serve` receives the listener via fd 3 (`github.com/coreos/go-systemd/v22/activation`). For local testing without systemd, use `-listen :PORT`.
+
+The `jobapp.service` unit passes `-idle-timeout 5m`: after five minutes with no HTTP activity the process drains requests, closes SQLite, and exits. The next connection socket-activates a new process; sessions are process-scoped so you must sign in again.
 
 Prefer binding the socket to a Tailscale IP so the UI is not on the public internet.
 
