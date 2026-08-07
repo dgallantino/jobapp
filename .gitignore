@@ -16,4 +16,4 @@
 *.swp
 *~
 .DS_Store
-
+.cursor/*
