@@ -16,7 +16,9 @@
     <tr>
       <th>Title</th>
       <th>Company</th>
+      <th>Salary</th>
       <th>Source</th>
+      <th>Link</th>
       <th>Status</th>
     </tr>
   </thead>
@@ -25,7 +27,15 @@
     <tr>
       <td><a href="/jobs/{{.ID}}">{{.Title}}</a></td>
       <td>{{.Company}}</td>
+      <td>{{if .Salary}}{{.Salary}}{{else}}<span class="muted">—</span>{{end}}</td>
       <td>{{.SourceName}}</td>
+      <td>
+        {{if .SourceURL}}
+        <a class="job-link" href="{{.SourceURL}}" target="_blank" rel="noopener noreferrer">Job ad</a>
+        {{else}}
+        <span class="muted">—</span>
+        {{end}}
+      </td>
       <td>
         {{template "status_cell" .}}
       </td>

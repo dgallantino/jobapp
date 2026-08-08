@@ -268,3 +268,18 @@ tr:last-child td { border-bottom: none; }
 
 .checkbox-row label { margin: 0; }
 .checkbox-row input { width: auto; }
+
+a.job-link {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+a.job-link:hover {
+  border-color: var(--accent);
+  text-decoration: none;
+}
