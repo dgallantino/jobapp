@@ -25,6 +25,32 @@ func loadJobstreetFixture(t *testing.T, name string) *goquery.Document {
 	return doc
 }
 
+func TestTextWithBreaks_ListItemWrappedInParagraph(t *testing.T) {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(`
+		<div>
+			<ul>
+				<li><p>Confirms project requirements by reviewing program objective, input data, and output requirements</p></li>
+				<li>
+					<p>Second item with leading whitespace before the paragraph</p>
+				</li>
+			</ul>
+		</div>
+	`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := textWithBreaks(doc.Find("div").First())
+	if !strings.Contains(got, "• Confirms project requirements by reviewing program objective, input data, and output requirements\n") {
+		t.Errorf("bullet should sit on same line as <li><p> text, got:\n%s", got)
+	}
+	if !strings.Contains(got, "• Second item with leading whitespace before the paragraph") {
+		t.Errorf("bullet should sit on same line when whitespace precedes <p>, got:\n%s", got)
+	}
+	if strings.Contains(got, "•\n") {
+		t.Errorf("orphan bullet line should not appear, got:\n%s", got)
+	}
+}
+
 func TestParseJobstreetDetail_WithSalary(t *testing.T) {
 	doc := loadJobstreetFixture(t, "jobstreet_detail_with_salary.html")
 	pageURL := "https://id.jobstreet.com/job/93782463?ref=recom-homepage&origin=showNewTab#sol=abc"

@@ -256,6 +256,11 @@ func writeHTMLTextWithBreaks(b *strings.Builder, n *html.Node) {
 	}
 	switch n.Type {
 	case html.TextNode:
+		// Keep "• text" on one line when <li> wraps content in <p>/<div>
+		// and the markup has leading whitespace after the bullet.
+		if hasOpenBulletPrefix(b) && strings.TrimSpace(n.Data) == "" {
+			return
+		}
 		b.WriteString(n.Data)
 	case html.ElementNode:
 		tag := strings.ToLower(n.Data)
@@ -273,7 +278,11 @@ func writeHTMLTextWithBreaks(b *strings.Builder, n *html.Node) {
 				b.WriteString("• ")
 			}
 		} else if isBlockElement(tag) {
-			ensureTrailingNewline(b)
+			// Do not break before the first block child of <li>; that would put
+			// the bullet alone on a line above the item text.
+			if !hasOpenBulletPrefix(b) {
+				ensureTrailingNewline(b)
+			}
 		}
 		for c := n.FirstChild; c != nil; c = c.NextSibling {
 			writeHTMLTextWithBreaks(b, c)
@@ -282,6 +291,18 @@ func writeHTMLTextWithBreaks(b *strings.Builder, n *html.Node) {
 			ensureTrailingNewline(b)
 		}
 	}
+}
+
+// hasOpenBulletPrefix reports whether the current line is exactly our list
+// bullet marker with no item text written yet.
+func hasOpenBulletPrefix(b *strings.Builder) bool {
+	s := b.String()
+	i := strings.LastIndexByte(s, '\n')
+	line := s
+	if i >= 0 {
+		line = s[i+1:]
+	}
+	return line == "• "
 }
 
 func listItemHasBulletPrefix(n *html.Node) bool {
