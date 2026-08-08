@@ -27,6 +27,7 @@ type JobAd struct {
 	SourceURL   string
 	Title       string
 	Company     string
+	Salary      string
 	Description string
 	PostedAt    *time.Time
 	ScrapedAt   time.Time

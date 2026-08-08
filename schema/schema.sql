@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS job_ads (
     source_url TEXT NOT NULL UNIQUE,
     title TEXT NOT NULL DEFAULT '',
     company TEXT NOT NULL DEFAULT '',
+    salary TEXT NOT NULL DEFAULT '',
     description TEXT NOT NULL DEFAULT '',
     posted_at DATETIME,
     scraped_at DATETIME NOT NULL DEFAULT (datetime('now')),

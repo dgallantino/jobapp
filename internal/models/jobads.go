@@ -10,7 +10,7 @@ import (
 // ListJobAds returns job ads, optionally filtered by status, newest first.
 func ListJobAds(ctx context.Context, db *sql.DB, status string) ([]JobAd, error) {
 	q := `
-		SELECT j.id, j.source_id, j.source_url, j.title, j.company, j.description,
+		SELECT j.id, j.source_id, j.source_url, j.title, j.company, j.salary, j.description,
 		       j.posted_at, j.scraped_at, j.status, COALESCE(s.name, '')
 		FROM job_ads j
 		LEFT JOIN sources s ON s.id = j.source_id`
@@ -41,7 +41,7 @@ func ListJobAds(ctx context.Context, db *sql.DB, status string) ([]JobAd, error)
 // GetJobAd returns a single job ad by id.
 func GetJobAd(ctx context.Context, db *sql.DB, id int64) (JobAd, error) {
 	row := db.QueryRowContext(ctx, `
-		SELECT j.id, j.source_id, j.source_url, j.title, j.company, j.description,
+		SELECT j.id, j.source_id, j.source_url, j.title, j.company, j.salary, j.description,
 		       j.posted_at, j.scraped_at, j.status, COALESCE(s.name, '')
 		FROM job_ads j
 		LEFT JOIN sources s ON s.id = j.source_id
@@ -59,7 +59,7 @@ func scanJobAd(row scannable) (JobAd, error) {
 	var postedAt sql.NullString
 	var scrapedAt string
 	err := row.Scan(
-		&ad.ID, &sourceID, &ad.SourceURL, &ad.Title, &ad.Company, &ad.Description,
+		&ad.ID, &sourceID, &ad.SourceURL, &ad.Title, &ad.Company, &ad.Salary, &ad.Description,
 		&postedAt, &scrapedAt, &ad.Status, &ad.SourceName,
 	)
 	if err != nil {
@@ -95,10 +95,10 @@ func InsertJobAdIfNew(ctx context.Context, db *sql.DB, ad JobAd) (id int64, inse
 	}
 
 	res, err := db.ExecContext(ctx, `
-		INSERT INTO job_ads (source_id, source_url, title, company, description, posted_at, status)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO job_ads (source_id, source_url, title, company, salary, description, posted_at, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(source_url) DO NOTHING`,
-		sourceID, ad.SourceURL, ad.Title, ad.Company, ad.Description, postedAt, ad.Status,
+		sourceID, ad.SourceURL, ad.Title, ad.Company, ad.Salary, ad.Description, postedAt, ad.Status,
 	)
 	if err != nil {
 		return 0, false, err
