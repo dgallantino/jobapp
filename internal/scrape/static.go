@@ -2,8 +2,6 @@ package scrape
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -41,7 +39,7 @@ func (a *StaticAdapter) Name() string { return "static" }
 // it returns one JobAd per discovered absolute job-like link (title from link text).
 // Otherwise it treats the URL as a single job detail page.
 func (a *StaticAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
-	doc, finalURL, err := a.fetchDoc(ctx, pageURL)
+	doc, finalURL, err := fetchDocument(ctx, a.Client, pageURL)
 	if err != nil {
 		return nil, err
 	}
@@ -67,37 +65,6 @@ func (a *StaticAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, er
 type linkHit struct {
 	href  string
 	title string
-}
-
-func (a *StaticAdapter) fetchDoc(ctx context.Context, pageURL string) (*goquery.Document, string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
-	if err != nil {
-		return nil, "", err
-	}
-	req.Header.Set("User-Agent", "jobapp/1.0 (+personal job scraper)")
-
-	client := a.Client
-	if client == nil {
-		client = DefaultHTTPClient()
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		return nil, "", fmt.Errorf("HTTP %d for %s", resp.StatusCode, pageURL)
-	}
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
-	if err != nil {
-		return nil, "", err
-	}
-	final := pageURL
-	if resp.Request != nil && resp.Request.URL != nil {
-		final = resp.Request.URL.String()
-	}
-	return doc, final, nil
 }
 
 func discoverJobLinks(doc *goquery.Document, base string) []linkHit {
