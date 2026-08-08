@@ -1,6 +1,9 @@
 package scrape
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -131,6 +134,71 @@ func TestParseJobstreetListing(t *testing.T) {
 	}
 	if ads[1].Description != "" {
 		t.Errorf("listing description should be empty, got %q", ads[1].Description)
+	}
+}
+
+func TestJobstreetAdapter_ScrapeListingEnrichesDetails(t *testing.T) {
+	listingHTML, err := os.ReadFile(filepath.Join("testdata", "jobstreet_listing.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	detailWithSalary, err := os.ReadFile(filepath.Join("testdata", "jobstreet_detail_with_salary.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	detailNoSalary, err := os.ReadFile(filepath.Join("testdata", "jobstreet_detail_no_salary.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/id/backend-developer-jobs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(listingHTML)
+	})
+	mux.HandleFunc("/id/job/93713877", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(detailWithSalary)
+	})
+	mux.HandleFunc("/id/job/93828612", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(detailNoSalary)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	a := NewJobstreetAdapter(2)
+	a.Client = srv.Client()
+
+	ads, err := a.Scrape(context.Background(), srv.URL+"/id/backend-developer-jobs")
+	if err != nil {
+		t.Fatalf("Scrape: %v", err)
+	}
+	if len(ads) != 2 {
+		t.Fatalf("got %d ads, want 2", len(ads))
+	}
+
+	if got, want := ads[0].SourceURL, srv.URL+"/id/job/93713877"; got != want {
+		t.Errorf("ads[0].SourceURL = %q, want %q", got, want)
+	}
+	if got, want := ads[0].Title, "Backend Developer — Support (Project)"; got != want {
+		t.Errorf("ads[0].Title = %q, want %q", got, want)
+	}
+	if !strings.Contains(ads[0].Description, "backup teknis") {
+		t.Errorf("ads[0].Description missing detail snippet: %q", ads[0].Description)
+	}
+
+	if got, want := ads[1].SourceURL, srv.URL+"/id/job/93828612"; got != want {
+		t.Errorf("ads[1].SourceURL = %q, want %q", got, want)
+	}
+	if got, want := ads[1].Title, "Full Stack Engineer"; got != want {
+		t.Errorf("ads[1].Title = %q, want %q", got, want)
+	}
+	if got, want := ads[1].Salary, jobstreetSalaryUndisclosed; got != want {
+		t.Errorf("ads[1].Salary = %q, want %q", got, want)
+	}
+	if !strings.Contains(ads[1].Description, "Experience with Odoo") {
+		t.Errorf("ads[1].Description missing detail snippet: %q", ads[1].Description)
 	}
 }
 

@@ -3,10 +3,12 @@ package scrape
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/PuerkitoBio/goquery"
@@ -33,12 +35,20 @@ var jobDetailPathRE = regexp.MustCompile(`(?i)^(?:/[a-z]{2})?/job/(\d+)/?$`)
 // Prefer these selectors over StaticAdapter heuristics (og:site_name is the
 // board name "Jobstreet Indonesia", not the employer).
 type JobstreetAdapter struct {
-	Client *http.Client
+	Client            *http.Client
+	ScrapeConcurrency int // max concurrent detail fetches per listing scrape
 }
 
 // NewJobstreetAdapter returns a JobStreet adapter using the default HTTP client.
-func NewJobstreetAdapter() *JobstreetAdapter {
-	return &JobstreetAdapter{Client: DefaultHTTPClient()}
+// scrapeConcurrency caps concurrent detail-page fetches (minimum 1).
+func NewJobstreetAdapter(scrapeConcurrency int) *JobstreetAdapter {
+	if scrapeConcurrency < 1 {
+		scrapeConcurrency = 1
+	}
+	return &JobstreetAdapter{
+		Client:            DefaultHTTPClient(),
+		ScrapeConcurrency: scrapeConcurrency,
+	}
 }
 
 func (a *JobstreetAdapter) Name() string { return "jobstreet" }
@@ -61,7 +71,57 @@ func (a *JobstreetAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd,
 	if len(ads) == 0 {
 		return nil, fmt.Errorf("jobstreet: no jobs found at %s", finalURL)
 	}
-	return ads, nil
+	return a.enrichListingDetails(ctx, ads), nil
+}
+
+// enrichListingDetails fetches each listing card's detail page concurrently
+// and replaces stubs with full ads. On failure, keeps the listing-card fields.
+func (a *JobstreetAdapter) enrichListingDetails(ctx context.Context, ads []JobAd) []JobAd {
+	if len(ads) == 0 {
+		return ads
+	}
+	concurrency := a.ScrapeConcurrency
+	if concurrency < 1 {
+		concurrency = 1
+	}
+
+	out := make([]JobAd, len(ads))
+	copy(out, ads)
+
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	for i, stub := range ads {
+		if err := ctx.Err(); err != nil {
+			break
+		}
+		wg.Add(1)
+		go func(i int, stub JobAd) {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			defer func() { <-sem }()
+
+			if err := ctx.Err(); err != nil {
+				return
+			}
+			doc, finalURL, err := fetchDocument(ctx, a.Client, stub.SourceURL)
+			if err != nil {
+				log.Printf("jobstreet: detail %s: %v", stub.SourceURL, err)
+				return
+			}
+			ad, err := parseJobstreetDetail(doc, finalURL)
+			if err != nil {
+				log.Printf("jobstreet: detail %s: %v", stub.SourceURL, err)
+				return
+			}
+			out[i] = ad
+		}(i, stub)
+	}
+	wg.Wait()
+	return out
 }
 
 func parseJobstreetDetail(doc *goquery.Document, pageURL string) (JobAd, error) {
