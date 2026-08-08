@@ -1,13 +1,16 @@
 :root {
-  --bg: #f6f3ee;
-  --bg-accent: #e8e2d8;
-  --ink: #1c1a17;
-  --muted: #5c574e;
-  --line: #cfc6b8;
-  --accent: #0f5c4c;
-  --accent-hover: #0a4539;
-  --danger: #8b2e2e;
-  --card: #fffdf9;
+  --bg: #14181c;
+  --bg-accent: #1e252c;
+  --ink: #e8ecef;
+  --muted: #9aa3ad;
+  --line: #2f3842;
+  --accent: #3db89a;
+  --accent-hover: #56c9ad;
+  --danger: #e06a6a;
+  --card: #1a2026;
+  --on-accent: #0d1216;
+  --input-bg: #12171c;
+  --letter-bg: #16241f;
   --radius: 6px;
   --font: "IBM Plex Sans", "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, monospace;
@@ -15,13 +18,17 @@
 
 * { box-sizing: border-box; }
 
+html {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   font-family: var(--font);
   color: var(--ink);
   background:
-    radial-gradient(1200px 600px at 10% -10%, #dfece8 0%, transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, #efe6d6 0%, transparent 50%),
+    radial-gradient(1200px 600px at 10% -10%, #1a2e2a 0%, transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, #243040 0%, transparent 50%),
     var(--bg);
   min-height: 100vh;
   line-height: 1.45;
@@ -100,7 +107,7 @@ textarea {
   padding: 0.55rem 0.65rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: #fff;
+  background: var(--input-bg);
   font: inherit;
   color: var(--ink);
 }
@@ -115,7 +122,7 @@ button,
   border: none;
   border-radius: var(--radius);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font: inherit;
   cursor: pointer;
 }
@@ -129,7 +136,7 @@ button.secondary {
   border: 1px solid var(--line);
 }
 
-button.danger { background: var(--danger); }
+button.danger { background: var(--danger); color: var(--on-accent); }
 
 .error {
   color: var(--danger);
@@ -155,7 +162,7 @@ button.danger { background: var(--danger); }
 .filters a.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 table {
@@ -208,7 +215,7 @@ tr:last-child td { border-bottom: none; }
 
 .letter {
   white-space: pre-wrap;
-  background: #f0f7f4;
+  background: var(--letter-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 1rem;
