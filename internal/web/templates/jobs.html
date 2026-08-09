@@ -11,9 +11,27 @@
 {{if not .Jobs}}
 <p class="muted">No job ads yet. Add a source and run <code>jobapp crawl</code>.</p>
 {{else}}
+<form id="bulk-jobs" method="post" action="/jobs/bulk-status">
+  <input type="hidden" name="filter" value="{{.Status}}">
+  <div class="bulk-toolbar">
+    <label class="bulk-status-label" for="bulk-status">Set status</label>
+    <select id="bulk-status" name="status">
+      <option value="ignored">ignored</option>
+      <option value="applied">applied</option>
+      <option value="rejected">rejected</option>
+    </select>
+    <button type="submit">Apply</button>
+    <button type="submit" class="danger" formaction="/jobs/bulk-delete"
+            onclick="return confirm('Delete selected job ads?')">Delete</button>
+  </div>
+</form>
 <table>
   <thead>
     <tr>
+      <th class="col-check">
+        <input type="checkbox" id="select-all" aria-label="Select all"
+               onclick="document.querySelectorAll('input[name=id][form=bulk-jobs]').forEach(cb => cb.checked = this.checked)">
+      </th>
       <th>Title</th>
       <th>Company</th>
       <th>Salary</th>
@@ -25,6 +43,9 @@
   <tbody>
     {{range .Jobs}}
     <tr>
+      <td class="col-check">
+        <input type="checkbox" name="id" value="{{.ID}}" form="bulk-jobs" aria-label="Select {{.Title}}">
+      </td>
       <td><a href="/jobs/{{.ID}}">{{.Title}}</a></td>
       <td>{{.Company}}</td>
       <td>{{if .Salary}}{{.Salary}}{{else}}<span class="muted">—</span>{{end}}</td>
