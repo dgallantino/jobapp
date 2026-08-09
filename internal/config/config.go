@@ -9,26 +9,28 @@ import (
 
 // Config holds runtime settings loaded from the environment.
 type Config struct {
-	DBPath           string
-	ListenAddr       string
-	SitePasswordHash string // bcrypt hash
-	SessionSecret    string
-	OpenRouterAPIKey string
-	OpenRouterModel  string
-	TelegramBotToken string
-	TelegramChatID   int64
+	DBPath            string
+	ListenAddr        string
+	SitePasswordHash  string // bcrypt hash
+	SessionSecret     string
+	OpenRouterAPIKey  string
+	OpenRouterModel   string
+	TelegramBotToken  string
+	TelegramChatID    int64
+	ScrapeConcurrency int // max concurrent detail fetches per listing scrape
 }
 
 // Load reads configuration from environment variables.
 func Load() (Config, error) {
 	cfg := Config{
-		DBPath:           envOr("JOBAPP_DB", "jobs.db"),
-		ListenAddr:       envOr("JOBAPP_LISTEN", ":8080"),
-		SitePasswordHash: os.Getenv("JOBAPP_PASSWORD_HASH"),
-		SessionSecret:    os.Getenv("JOBAPP_SESSION_SECRET"),
-		OpenRouterAPIKey: os.Getenv("OPENROUTER_API_KEY"),
-		OpenRouterModel:  envOr("OPENROUTER_MODEL", "openai/gpt-4o-mini"),
-		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
+		DBPath:            envOr("JOBAPP_DB", "jobs.db"),
+		ListenAddr:        envOr("JOBAPP_LISTEN", ":8080"),
+		SitePasswordHash:  os.Getenv("JOBAPP_PASSWORD_HASH"),
+		SessionSecret:     os.Getenv("JOBAPP_SESSION_SECRET"),
+		OpenRouterAPIKey:  os.Getenv("OPENROUTER_API_KEY"),
+		OpenRouterModel:   envOr("OPENROUTER_MODEL", "openai/gpt-4o-mini"),
+		TelegramBotToken:  os.Getenv("TELEGRAM_BOT_TOKEN"),
+		ScrapeConcurrency: 5,
 	}
 
 	if chatID := strings.TrimSpace(os.Getenv("TELEGRAM_CHAT_ID")); chatID != "" {
@@ -37,6 +39,17 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("TELEGRAM_CHAT_ID: %w", err)
 		}
 		cfg.TelegramChatID = n
+	}
+
+	if raw := strings.TrimSpace(os.Getenv("JOBAPP_SCRAPE_CONCURRENCY")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("JOBAPP_SCRAPE_CONCURRENCY: %w", err)
+		}
+		if n < 1 {
+			return Config{}, fmt.Errorf("JOBAPP_SCRAPE_CONCURRENCY: must be >= 1")
+		}
+		cfg.ScrapeConcurrency = n
 	}
 
 	return cfg, nil

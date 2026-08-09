@@ -113,6 +113,7 @@ See [`.env.example`](.env.example). Summary:
 | `JOBAPP_LISTEN` | Dev listen address for `serve` |
 | `JOBAPP_PASSWORD_HASH` | bcrypt hash of site password |
 | `JOBAPP_SESSION_SECRET` | HMAC key for session cookie (random at deploy) |
+| `JOBAPP_SCRAPE_CONCURRENCY` | Max concurrent detail fetches per listing scrape (default `5`) |
 | `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` | Cover letter generation |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Group short-poll checker |
 

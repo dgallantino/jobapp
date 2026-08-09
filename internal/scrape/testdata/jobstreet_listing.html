@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <article data-automation="normalJob">
+    <a data-automation="job-list-view-job-link" href="/id/job/93713877?type=standard&amp;ref=search-standalone">overlay</a>
+    <a data-automation="jobTitle" href="/id/job/93713877?type=standard&amp;ref=search-standalone&amp;origin=cardTitle">Backend Developer</a>
+    <span data-automation="jobCompany">PT Intersolusi Teknologi Asia</span>
+    <span data-automation="jobSalary">Rp 5.000.000 – Rp 7.500.000 per month</span>
+  </article>
+  <article data-automation="normalJob">
+    <a data-automation="job-list-view-job-link" href="/id/job/93828612?type=standard&amp;ref=search-standalone">overlay</a>
+    <a data-automation="jobTitle" href="/id/job/93828612?type=standard&amp;ref=search-standalone&amp;origin=cardTitle">BACKEND DEVELOPER</a>
+    <span data-automation="jobCompany">PT Global Solusindo Kompudata</span>
+  </article>
+  <article data-automation="normalJob">
+    <!-- duplicate job id via another origin link; should dedupe -->
+    <a data-automation="job-list-view-job-link" href="/id/job/93713877?type=standard&amp;ref=search-standalone&amp;origin=jobCard">overlay</a>
+    <a data-automation="jobTitle" href="/id/job/93713877?origin=dup">Backend Developer</a>
+    <span data-automation="jobCompany">PT Intersolusi Teknologi Asia</span>
+    <span data-automation="jobSalary">Rp 5.000.000 – Rp 7.500.000 per month</span>
+  </article>
+</body>
+</html>

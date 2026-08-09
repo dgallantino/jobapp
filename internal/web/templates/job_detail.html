@@ -4,6 +4,7 @@
 <h1>{{.Job.Title}}</h1>
 <div class="detail-meta">
   <div><strong>Company:</strong> {{.Job.Company}}</div>
+  <div><strong>Salary:</strong> {{if .Job.Salary}}{{.Job.Salary}}{{else}}<span class="muted">—</span>{{end}}</div>
   <div><strong>Source:</strong> {{.Job.SourceName}}</div>
   <div><strong>URL:</strong> <a href="{{.Job.SourceURL}}" rel="noopener noreferrer" target="_blank">{{.Job.SourceURL}}</a></div>
   <div>

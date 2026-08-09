@@ -14,6 +14,7 @@ type JobAd struct {
 	SourceURL   string
 	Title       string
 	Company     string
+	Salary      string
 	Description string
 	PostedAt    *time.Time
 }
@@ -32,11 +33,13 @@ type Registry struct {
 }
 
 // NewRegistry returns a registry with built-in adapters.
-func NewRegistry() *Registry {
+// scrapeConcurrency caps concurrent detail-page fetches per listing scrape
+// (shared across adapters that enrich listings).
+func NewRegistry(scrapeConcurrency int) *Registry {
 	r := &Registry{byName: map[string]Adapter{}}
 	for _, a := range []Adapter{
 		NewStaticAdapter(),
-		NewJobstreetAdapter(),
+		NewJobstreetAdapter(scrapeConcurrency),
 		NewGlintsAdapter(),
 	} {
 		r.byName[a.Name()] = a

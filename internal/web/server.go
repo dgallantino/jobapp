@@ -136,6 +136,8 @@ func (s *Server) routes() http.Handler {
 	authed.HandleFunc("GET /{$}", s.handleJobs)
 	authed.HandleFunc("GET /jobs/{id}", s.handleJobDetail)
 	authed.HandleFunc("PATCH /jobs/{id}/status", s.handleJobStatus)
+	authed.HandleFunc("POST /jobs/bulk-status", s.handleJobsBulkStatus)
+	authed.HandleFunc("POST /jobs/bulk-delete", s.handleJobsBulkDelete)
 	authed.HandleFunc("POST /jobs/{id}/cover-letter", s.handleCoverLetter)
 	authed.HandleFunc("GET /profile", s.handleProfileGet)
 	authed.HandleFunc("POST /profile", s.handleProfilePost)
@@ -305,6 +307,74 @@ func (s *Server) handleJobStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, "status_cell", job)
+}
+
+func (s *Server) handleJobsBulkStatus(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	ids, err := parseFormJobIDs(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	status := r.FormValue("status")
+	if err := models.UpdateJobAdsStatus(r.Context(), s.DB, ids, status); err != nil {
+		if strings.HasPrefix(err.Error(), "invalid status") || err.Error() == "no job ad ids" {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, jobsListPath(r.FormValue("filter")), http.StatusSeeOther)
+}
+
+func (s *Server) handleJobsBulkDelete(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	ids, err := parseFormJobIDs(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := models.DeleteJobAds(r.Context(), s.DB, ids); err != nil {
+		if err.Error() == "no job ad ids" {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, jobsListPath(r.FormValue("filter")), http.StatusSeeOther)
+}
+
+func parseFormJobIDs(r *http.Request) ([]int64, error) {
+	raw := r.Form["id"]
+	if len(raw) == 0 {
+		return nil, fmt.Errorf("no ids selected")
+	}
+	ids := make([]int64, 0, len(raw))
+	for _, s := range raw {
+		id, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("bad id %q", s)
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+func jobsListPath(filter string) string {
+	switch filter {
+	case models.StatusNew, models.StatusApplied, models.StatusRejected, models.StatusIgnored:
+		return "/?status=" + filter
+	default:
+		return "/"
+	}
 }
 
 func (s *Server) handleCoverLetter(w http.ResponseWriter, r *http.Request) {
