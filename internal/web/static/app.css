@@ -277,11 +277,88 @@ tr:last-child td { border-bottom: none; }
 
 .source-list .row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.5rem 1rem;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
 }
+
+.source-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.source-url {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  margin-top: 0.35rem;
+  padding: 0.35rem 0.4rem 0.35rem 0.55rem;
+  background: var(--input-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.source-url-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  user-select: all;
+}
+
+.source-url-btns {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.source-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.source-actions button {
+  margin-top: 0;
+}
+
+a.source-icon-btn,
+button.source-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  line-height: 0;
+  cursor: pointer;
+}
+
+a.source-icon-btn:hover,
+button.source-icon-btn:hover {
+  color: var(--accent);
+  background: var(--bg-accent);
+  text-decoration: none;
+}
+
+button.source-icon-btn .icon-check { display: none; }
+button.source-icon-btn.copied {
+  color: var(--accent);
+}
+button.source-icon-btn.copied .icon-copy { display: none; }
+button.source-icon-btn.copied .icon-check { display: block; }
 
 .badge {
   font-size: 0.75rem;
