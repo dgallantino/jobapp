@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -32,5 +33,20 @@ func Open(path string) (*sql.DB, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
+	if err := migrate(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	return db, nil
+}
+
+// migrate applies additive column changes for existing databases.
+// CREATE TABLE IF NOT EXISTS does not add new columns to older files.
+func migrate(db *sql.DB) error {
+	if _, err := db.Exec(`ALTER TABLE job_ads ADD COLUMN salary TEXT NOT NULL DEFAULT ''`); err != nil {
+		if !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
+			return fmt.Errorf("migrate job_ads.salary: %w", err)
+		}
+	}
+	return nil
 }

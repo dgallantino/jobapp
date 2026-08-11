@@ -4,13 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
 // ListJobAds returns job ads, optionally filtered by status, newest first.
 func ListJobAds(ctx context.Context, db *sql.DB, status string) ([]JobAd, error) {
 	q := `
-		SELECT j.id, j.source_id, j.source_url, j.title, j.company, j.description,
+		SELECT j.id, j.source_id, j.source_url, j.title, j.company, j.salary, j.description,
 		       j.posted_at, j.scraped_at, j.status, COALESCE(s.name, '')
 		FROM job_ads j
 		LEFT JOIN sources s ON s.id = j.source_id`
@@ -41,7 +42,7 @@ func ListJobAds(ctx context.Context, db *sql.DB, status string) ([]JobAd, error)
 // GetJobAd returns a single job ad by id.
 func GetJobAd(ctx context.Context, db *sql.DB, id int64) (JobAd, error) {
 	row := db.QueryRowContext(ctx, `
-		SELECT j.id, j.source_id, j.source_url, j.title, j.company, j.description,
+		SELECT j.id, j.source_id, j.source_url, j.title, j.company, j.salary, j.description,
 		       j.posted_at, j.scraped_at, j.status, COALESCE(s.name, '')
 		FROM job_ads j
 		LEFT JOIN sources s ON s.id = j.source_id
@@ -59,7 +60,7 @@ func scanJobAd(row scannable) (JobAd, error) {
 	var postedAt sql.NullString
 	var scrapedAt string
 	err := row.Scan(
-		&ad.ID, &sourceID, &ad.SourceURL, &ad.Title, &ad.Company, &ad.Description,
+		&ad.ID, &sourceID, &ad.SourceURL, &ad.Title, &ad.Company, &ad.Salary, &ad.Description,
 		&postedAt, &scrapedAt, &ad.Status, &ad.SourceName,
 	)
 	if err != nil {
@@ -95,10 +96,10 @@ func InsertJobAdIfNew(ctx context.Context, db *sql.DB, ad JobAd) (id int64, inse
 	}
 
 	res, err := db.ExecContext(ctx, `
-		INSERT INTO job_ads (source_id, source_url, title, company, description, posted_at, status)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO job_ads (source_id, source_url, title, company, salary, description, posted_at, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(source_url) DO NOTHING`,
-		sourceID, ad.SourceURL, ad.Title, ad.Company, ad.Description, postedAt, ad.Status,
+		sourceID, ad.SourceURL, ad.Title, ad.Company, ad.Salary, ad.Description, postedAt, ad.Status,
 	)
 	if err != nil {
 		return 0, false, err
@@ -134,4 +135,66 @@ func UpdateJobAdStatus(ctx context.Context, db *sql.DB, id int64, status string)
 		return fmt.Errorf("job ad %d not found", id)
 	}
 	return nil
+}
+
+// UpdateJobAdsStatus sets status for multiple job ads (applied, rejected, or ignored).
+func UpdateJobAdsStatus(ctx context.Context, db *sql.DB, ids []int64, status string) error {
+	switch status {
+	case StatusApplied, StatusRejected, StatusIgnored:
+	default:
+		return fmt.Errorf("invalid status %q", status)
+	}
+	placeholders, args, err := jobAdIDsClause(ids)
+	if err != nil {
+		return err
+	}
+	allArgs := append([]any{status}, args...)
+	_, err = db.ExecContext(ctx,
+		`UPDATE job_ads SET status = ? WHERE id IN (`+placeholders+`)`,
+		allArgs...,
+	)
+	return err
+}
+
+// DeleteJobAds removes job ads and their cover letters.
+func DeleteJobAds(ctx context.Context, db *sql.DB, ids []int64) error {
+	placeholders, args, err := jobAdIDsClause(ids)
+	if err != nil {
+		return err
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM cover_letters WHERE job_ad_id IN (`+placeholders+`)`,
+		args...,
+	); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM job_ads WHERE id IN (`+placeholders+`)`,
+		args...,
+	); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func jobAdIDsClause(ids []int64) (placeholders string, args []any, err error) {
+	if len(ids) == 0 {
+		return "", nil, fmt.Errorf("no job ad ids")
+	}
+	args = make([]any, len(ids))
+	var b strings.Builder
+	for i, id := range ids {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteByte('?')
+		args[i] = id
+	}
+	return b.String(), args, nil
 }

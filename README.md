@@ -12,6 +12,14 @@ jobapp telegram-check   # one Telegram short-poll pass, then exit
 
 ## Build
 
+For deploy, use the Makefile (output: `build/jobapp`):
+
+```bash
+make build
+```
+
+Quick local build:
+
 ```bash
 go build -o jobapp ./cmd/jobapp
 ```
@@ -21,14 +29,12 @@ No npm/node. htmx is vendored under `internal/web/static/htmx.min.js`.
 ## Local development
 
 ```bash
-cp .env.example .env
-# fill JOBAPP_PASSWORD_HASH, JOBAPP_SESSION_SECRET (and optionally OpenRouter/Telegram)
+./scripts/configure.sh
+# fill remaining secrets in .env (OpenRouter, Telegram, etc.)
 
-# Generate a bcrypt password hash (example):
-go run ./scripts/hashpassword YOUR_PASSWORD
-
-# Generate a session secret:
-openssl rand -hex 32
+# Or manually: cp .env.example .env, then:
+#   go run ./scripts/hashpassword YOUR_PASSWORD
+#   openssl rand -hex 32
 
 set -a && source .env && set +a
 ./jobapp serve -listen :8080 -db ./jobs.db
@@ -51,6 +57,32 @@ Open `http://127.0.0.1:8080`, sign in, add crawl sources under **Sources**, then
 └── .env        # secrets (mode 600)
 ```
 
+### Automatic install
+
+```bash
+./scripts/configure.sh          # creates ./.env (mode 600); prompts for site password
+# edit ./.env — add OpenRouter / Telegram secrets
+
+make build
+sudo make install               # /opt/jobapp/jobapp, /opt/jobapp/.env, systemd units + daemon-reload
+sudo make enable                # jobapp.socket + crawl/telegram timers
+```
+
+| Step | Effect |
+|------|--------|
+| `configure.sh` | Copies `.env.example` → `.env`, sets `JOBAPP_SESSION_SECRET` and `JOBAPP_PASSWORD_HASH` |
+| `make build` | Builds `build/jobapp` (incremental via timestamps) |
+| `sudo make install` | Installs binary + `.env` to `PREFIX` (`/opt/jobapp` by default), installs units to `/etc/systemd/system/`, runs `daemon-reload` |
+| `sudo make enable` | `systemctl enable --now` for socket + both timers |
+
+`configure.sh` accepts a path — e.g. `sudo ./scripts/configure.sh /opt/jobapp/.env` — if you want secrets created directly at the install location.
+
+Other Makefile targets: `make disable`, `sudo make uninstall`, `make clean`.
+
+### Manual install
+
+If you are not using the Makefile:
+
 1. Build and copy the binary to `/opt/jobapp/jobapp`.
 2. Copy `.env.example` → `/opt/jobapp/.env` and fill secrets.
 3. Copy unit files from `systemd/` into `/etc/systemd/system/`.
@@ -69,7 +101,7 @@ The `jobapp.service` unit passes `-idle-timeout 5m`: after five minutes with no 
 
 Prefer binding the socket to a Tailscale IP so the UI is not on the public internet.
 
-**Containers:** not required. If a future JobStreet/Glints adapter needs Chromium for `chromedp`, use a host Chromium install; if you containerize the browser, use **Podman** (not Docker).
+**Containers:** not required. Glints listing crawl needs a host Chromium/Chrome install for `chromedp`; if you containerize the browser, use **Podman** (not Docker).
 
 ## Environment variables
 
@@ -81,6 +113,8 @@ See [`.env.example`](.env.example). Summary:
 | `JOBAPP_LISTEN` | Dev listen address for `serve` |
 | `JOBAPP_PASSWORD_HASH` | bcrypt hash of site password |
 | `JOBAPP_SESSION_SECRET` | HMAC key for session cookie (random at deploy) |
+| `JOBAPP_SCRAPE_CONCURRENCY` | Max concurrent detail fetches per listing scrape (default `5`) |
+| `JOBAPP_CHROME_PATH` | Chromium/Chrome binary for Glints listing chromedp (optional; PATH lookup if empty) |
 | `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` | Cover letter generation |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Group short-poll checker |
 
@@ -107,7 +141,8 @@ You can also use a helper bot such as `@userinfobot` / `@getidsbot` in the group
 Adapters are data-driven via the `sources.adapter` column:
 
 - `static` — `net/http` + `goquery` (default)
-- `jobstreet` / `glints` — stubs that fall back to `static` until JSON endpoints or selectors are confirmed (see comments in those files). `chromedp` is only for adapters that truly need JS.
+- `jobstreet` — SSR HTML listing cards + concurrent detail enrichment (`data-automation` selectors)
+- `glints` — chromedp renders explore listings (job cards after JS hydration), then HTTP + goquery detail enrichment (`textWithBreaks`). Host Chromium/Chrome must be on `PATH` for crawl sources using this adapter. Detail / telegram-check URLs do not need chromedp.
 
 ## Assumptions / stubs (flagged in code)
 

@@ -14,6 +14,7 @@ type JobAd struct {
 	SourceURL   string
 	Title       string
 	Company     string
+	Salary      string
 	Description string
 	PostedAt    *time.Time
 }
@@ -31,13 +32,22 @@ type Registry struct {
 	byName map[string]Adapter
 }
 
+// RegistryOptions configures built-in adapters.
+type RegistryOptions struct {
+	ScrapeConcurrency int    // max concurrent detail fetches per listing scrape
+	ChromePath        string // Chromium/Chrome binary for chromedp (Glints listing)
+}
+
 // NewRegistry returns a registry with built-in adapters.
-func NewRegistry() *Registry {
+func NewRegistry(opts RegistryOptions) *Registry {
+	if opts.ScrapeConcurrency < 1 {
+		opts.ScrapeConcurrency = 1
+	}
 	r := &Registry{byName: map[string]Adapter{}}
 	for _, a := range []Adapter{
 		NewStaticAdapter(),
-		NewJobstreetAdapter(),
-		NewGlintsAdapter(),
+		NewJobstreetAdapter(opts.ScrapeConcurrency),
+		NewGlintsAdapter(opts.ScrapeConcurrency, opts.ChromePath),
 	} {
 		r.byName[a.Name()] = a
 	}

@@ -2,14 +2,26 @@ package scrape
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 )
+
+// salaryTextRE matches common salary / compensation snippets in free text.
+var salaryTextRE = regexp.MustCompile(`(?i)(?:` +
+	`(?:salary|compensation|pay|gaji|upah)\s*[:\-]?\s*` +
+	`(?:(?:sgd|usd|idr|rp\.?|rm|myr|\$|s\$)\s*)?` +
+	`[\d.,]+\s*(?:k|jt|juta|million|m)?` +
+	`(?:\s*[-–—to]+\s*(?:(?:sgd|usd|idr|rp\.?|rm|myr|\$|s\$)\s*)?[\d.,]+\s*(?:k|jt|juta|million|m)?)?` +
+	`(?:\s*(?:/\s*(?:mo(?:nth)?|yr|year|hour|hr)|per\s+(?:month|year|hour)))?` +
+	`|` +
+	`(?:sgd|usd|idr|rp\.?|rm|myr|s\$|\$)\s*[\d.,]+\s*(?:k|jt|juta|million|m)?` +
+	`(?:\s*[-–—to]+\s*(?:(?:sgd|usd|idr|rp\.?|rm|myr|\$|s\$)\s*)?[\d.,]+\s*(?:k|jt|juta|million|m)?)?` +
+	`(?:\s*(?:/\s*(?:mo(?:nth)?|yr|year|hour|hr)|per\s+(?:month|year|hour)))?` +
+	`)`)
 
 // StaticAdapter uses net/http + goquery for server-rendered pages.
 type StaticAdapter struct {
@@ -27,7 +39,7 @@ func (a *StaticAdapter) Name() string { return "static" }
 // it returns one JobAd per discovered absolute job-like link (title from link text).
 // Otherwise it treats the URL as a single job detail page.
 func (a *StaticAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
-	doc, finalURL, err := a.fetchDoc(ctx, pageURL)
+	doc, finalURL, err := fetchDocument(ctx, a.Client, pageURL)
 	if err != nil {
 		return nil, err
 	}
@@ -53,37 +65,6 @@ func (a *StaticAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, er
 type linkHit struct {
 	href  string
 	title string
-}
-
-func (a *StaticAdapter) fetchDoc(ctx context.Context, pageURL string) (*goquery.Document, string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
-	if err != nil {
-		return nil, "", err
-	}
-	req.Header.Set("User-Agent", "jobapp/1.0 (+personal job scraper)")
-
-	client := a.Client
-	if client == nil {
-		client = DefaultHTTPClient()
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		return nil, "", fmt.Errorf("HTTP %d for %s", resp.StatusCode, pageURL)
-	}
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
-	if err != nil {
-		return nil, "", err
-	}
-	final := pageURL
-	if resp.Request != nil && resp.Request.URL != nil {
-		final = resp.Request.URL.String()
-	}
-	return doc, final, nil
 }
 
 func discoverJobLinks(doc *goquery.Document, base string) []linkHit {
@@ -167,12 +148,90 @@ func extractDetail(doc *goquery.Document, pageURL string) JobAd {
 	if title == "" {
 		title = pageURL
 	}
+	descStr := desc.String()
 	return JobAd{
 		SourceURL:   pageURL,
 		Title:       title,
 		Company:     company,
-		Description: desc.String(),
+		Salary:      extractSalary(doc, title, descStr),
+		Description: descStr,
 	}
+}
+
+func extractSalary(doc *goquery.Document, title, description string) string {
+	if s := salaryFromMeta(doc); s != "" {
+		return s
+	}
+	selectors := []string{
+		`[itemprop="baseSalary"]`,
+		`[itemprop="salary"]`,
+		`[class*="salary"]`,
+		`[class*="Salary"]`,
+		`[id*="salary"]`,
+		`[id*="Salary"]`,
+		`[data-automation*="salary"]`,
+		`.job-salary`,
+		`#job-salary`,
+	}
+	for _, sel := range selectors {
+		node := doc.Find(sel).First()
+		if node.Length() == 0 {
+			continue
+		}
+		text := collapseWS(node.Text())
+		if text == "" {
+			if content, ok := node.Attr("content"); ok {
+				text = collapseWS(content)
+			}
+		}
+		if text != "" && looksLikeSalary(text) {
+			return truncateSalary(text)
+		}
+	}
+	for _, blob := range []string{title, description} {
+		if m := salaryTextRE.FindString(blob); m != "" {
+			return truncateSalary(collapseWS(m))
+		}
+	}
+	return ""
+}
+
+func salaryFromMeta(doc *goquery.Document) string {
+	var found string
+	doc.Find("meta").Each(func(_ int, s *goquery.Selection) {
+		if found != "" {
+			return
+		}
+		name, _ := s.Attr("name")
+		prop, _ := s.Attr("property")
+		key := strings.ToLower(name + " " + prop)
+		if !strings.Contains(key, "salary") && !strings.Contains(key, "compensation") {
+			return
+		}
+		content, _ := s.Attr("content")
+		content = collapseWS(content)
+		if content != "" {
+			found = truncateSalary(content)
+		}
+	})
+	return found
+}
+
+func looksLikeSalary(s string) bool {
+	lower := strings.ToLower(s)
+	if strings.Contains(lower, "salary") || strings.Contains(lower, "compensation") ||
+		strings.Contains(lower, "gaji") || strings.Contains(lower, "negotiable") {
+		return true
+	}
+	return salaryTextRE.MatchString(s)
+}
+
+func truncateSalary(s string) string {
+	const max = 120
+	if len(s) <= max {
+		return s
+	}
+	return s[:max]
 }
 
 func collapseWS(s string) string {
