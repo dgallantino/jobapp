@@ -35,7 +35,7 @@ type Registry struct {
 // RegistryOptions configures built-in adapters.
 type RegistryOptions struct {
 	ScrapeConcurrency int    // max concurrent detail fetches per listing scrape
-	ChromePath        string // Chromium/Chrome binary for chromedp (Glints listing)
+	ChromePath        string // Chromium/Chrome binary for chromedp (Glints listing only)
 }
 
 // NewRegistry returns a registry with built-in adapters.
@@ -48,6 +48,7 @@ func NewRegistry(opts RegistryOptions) *Registry {
 		NewStaticAdapter(),
 		NewJobstreetAdapter(opts.ScrapeConcurrency),
 		NewGlintsAdapter(opts.ScrapeConcurrency, opts.ChromePath),
+		NewDeallsAdapter(opts.ScrapeConcurrency),
 	} {
 		r.byName[a.Name()] = a
 	}
@@ -78,6 +79,10 @@ func (r *Registry) Resolve(rawURL string) Adapter {
 		}
 	case strings.Contains(host, "glints"):
 		if a, ok := r.byName["glints"]; ok {
+			return a
+		}
+	case strings.Contains(host, "dealls"):
+		if a, ok := r.byName["dealls"]; ok {
 			return a
 		}
 	}

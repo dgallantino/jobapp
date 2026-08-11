@@ -143,6 +143,7 @@ Adapters are data-driven via the `sources.adapter` column:
 - `static` — `net/http` + `goquery` (default)
 - `jobstreet` — SSR HTML listing cards + concurrent detail enrichment (`data-automation` selectors)
 - `glints` — chromedp renders explore listings (job cards after JS hydration), then HTTP + goquery detail enrichment (`textWithBreaks`). Host Chromium/Chrome must be on `PATH` for crawl sources using this adapter. Detail / telegram-check URLs do not need chromedp.
+- `dealls` — SSR HTML / `__NEXT_DATA__` first-page listing + concurrent detail enrichment (Deskripsi Pekerjaan + Kualifikasi via `textWithBreaks`). No chromedp. Example source URL: `https://dealls.com/?searchJob=developer`.
 
 ## Assumptions / stubs (flagged in code)
 

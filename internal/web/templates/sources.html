@@ -1,7 +1,7 @@
 {{define "title"}}Sources · jobapp{{end}}
 {{define "content"}}
 <h1>Sources</h1>
-<p class="muted">Crawl targets. Adapter must match a registered scraper (<code>static</code>, <code>jobstreet</code>, <code>glints</code>).</p>
+<p class="muted">Crawl targets. Adapter must match a registered scraper (<code>static</code>, <code>jobstreet</code>, <code>glints</code>, <code>dealls</code>).</p>
 
 <ul class="source-list">
   {{range .Sources}}
@@ -49,6 +49,7 @@
     <option value="static">static</option>
     <option value="jobstreet">jobstreet</option>
     <option value="glints">glints</option>
+    <option value="dealls">dealls</option>
   </select>
   <div class="checkbox-row">
     <input id="enabled" name="enabled" type="checkbox" value="1" checked>
