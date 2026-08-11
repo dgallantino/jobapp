@@ -17,7 +17,8 @@ type Config struct {
 	OpenRouterModel   string
 	TelegramBotToken  string
 	TelegramChatID    int64
-	ScrapeConcurrency int // max concurrent detail fetches per listing scrape
+	ScrapeConcurrency int    // max concurrent detail fetches per listing scrape
+	ChromePath        string // Chromium/Chrome binary for chromedp (Glints listing)
 }
 
 // Load reads configuration from environment variables.
@@ -31,6 +32,7 @@ func Load() (Config, error) {
 		OpenRouterModel:   envOr("OPENROUTER_MODEL", "openai/gpt-4o-mini"),
 		TelegramBotToken:  os.Getenv("TELEGRAM_BOT_TOKEN"),
 		ScrapeConcurrency: 5,
+		ChromePath:        strings.TrimSpace(os.Getenv("JOBAPP_CHROME_PATH")),
 	}
 
 	if chatID := strings.TrimSpace(os.Getenv("TELEGRAM_CHAT_ID")); chatID != "" {

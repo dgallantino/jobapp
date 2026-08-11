@@ -7,13 +7,25 @@
   {{range .Sources}}
   <li>
     <div class="row">
-      <div>
+      <div class="source-main">
         <strong>{{.Name}}</strong>
         {{if .Enabled}}<span class="badge">enabled</span>{{else}}<span class="badge off">disabled</span>{{end}}
-        <div class="muted">{{.URL}}</div>
+        <div class="source-url">
+          <span class="source-url-text muted" title="{{.URL}}">{{.URL}}</span>
+          <div class="source-url-btns">
+            <a class="source-icon-btn" href="{{.URL}}" target="_blank" rel="noopener noreferrer" title="Open" aria-label="Open">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </a>
+            <button type="button" class="source-icon-btn" data-copy="{{.URL}}" title="Copy" aria-label="Copy"
+              onclick="navigator.clipboard.writeText(this.dataset.copy).then(() => { this.title = 'Copied'; this.classList.add('copied'); setTimeout(() => { this.title = 'Copy'; this.classList.remove('copied'); }, 1200); })">
+              <svg class="icon-copy" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <svg class="icon-check" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            </button>
+          </div>
+        </div>
         <div class="muted">adapter: {{.Adapter}}</div>
       </div>
-      <div>
+      <div class="source-actions">
         <a href="/sources/{{.ID}}/edit">Edit</a>
         <form method="post" action="/sources/{{.ID}}/delete" class="inline-form" onsubmit="return confirm('Delete this source?');">
           <button type="submit" class="danger">Delete</button>

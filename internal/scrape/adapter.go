@@ -32,15 +32,22 @@ type Registry struct {
 	byName map[string]Adapter
 }
 
+// RegistryOptions configures built-in adapters.
+type RegistryOptions struct {
+	ScrapeConcurrency int    // max concurrent detail fetches per listing scrape
+	ChromePath        string // Chromium/Chrome binary for chromedp (Glints listing)
+}
+
 // NewRegistry returns a registry with built-in adapters.
-// scrapeConcurrency caps concurrent detail-page fetches per listing scrape
-// (shared across adapters that enrich listings).
-func NewRegistry(scrapeConcurrency int) *Registry {
+func NewRegistry(opts RegistryOptions) *Registry {
+	if opts.ScrapeConcurrency < 1 {
+		opts.ScrapeConcurrency = 1
+	}
 	r := &Registry{byName: map[string]Adapter{}}
 	for _, a := range []Adapter{
 		NewStaticAdapter(),
-		NewJobstreetAdapter(scrapeConcurrency),
-		NewGlintsAdapter(),
+		NewJobstreetAdapter(opts.ScrapeConcurrency),
+		NewGlintsAdapter(opts.ScrapeConcurrency, opts.ChromePath),
 	} {
 		r.byName[a.Name()] = a
 	}

@@ -101,7 +101,7 @@ The `jobapp.service` unit passes `-idle-timeout 5m`: after five minutes with no 
 
 Prefer binding the socket to a Tailscale IP so the UI is not on the public internet.
 
-**Containers:** not required. If a future JobStreet/Glints adapter needs Chromium for `chromedp`, use a host Chromium install; if you containerize the browser, use **Podman** (not Docker).
+**Containers:** not required. Glints listing crawl needs a host Chromium/Chrome install for `chromedp`; if you containerize the browser, use **Podman** (not Docker).
 
 ## Environment variables
 
@@ -114,6 +114,7 @@ See [`.env.example`](.env.example). Summary:
 | `JOBAPP_PASSWORD_HASH` | bcrypt hash of site password |
 | `JOBAPP_SESSION_SECRET` | HMAC key for session cookie (random at deploy) |
 | `JOBAPP_SCRAPE_CONCURRENCY` | Max concurrent detail fetches per listing scrape (default `5`) |
+| `JOBAPP_CHROME_PATH` | Chromium/Chrome binary for Glints listing chromedp (optional; PATH lookup if empty) |
 | `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` | Cover letter generation |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Group short-poll checker |
 
@@ -140,7 +141,8 @@ You can also use a helper bot such as `@userinfobot` / `@getidsbot` in the group
 Adapters are data-driven via the `sources.adapter` column:
 
 - `static` — `net/http` + `goquery` (default)
-- `jobstreet` / `glints` — stubs that fall back to `static` until JSON endpoints or selectors are confirmed (see comments in those files). `chromedp` is only for adapters that truly need JS.
+- `jobstreet` — SSR HTML listing cards + concurrent detail enrichment (`data-automation` selectors)
+- `glints` — chromedp renders explore listings (job cards after JS hydration), then HTTP + goquery detail enrichment (`textWithBreaks`). Host Chromium/Chrome must be on `PATH` for crawl sources using this adapter. Detail / telegram-check URLs do not need chromedp.
 
 ## Assumptions / stubs (flagged in code)
 
