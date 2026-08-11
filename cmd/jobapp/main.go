@@ -104,7 +104,10 @@ func runCrawl(cfg config.Config, args []string) int {
 	}
 	defer sqlDB.Close()
 
-	reg := scrape.NewRegistry(cfg.ScrapeConcurrency)
+	reg := scrape.NewRegistry(scrape.RegistryOptions{
+		ScrapeConcurrency: cfg.ScrapeConcurrency,
+		ChromePath:        cfg.ChromePath,
+	})
 	if _, err := scrape.RunCrawl(context.Background(), sqlDB, reg); err != nil {
 		log.Fatal(err)
 	}
@@ -122,7 +125,10 @@ func runTelegram(cfg config.Config, args []string) int {
 	}
 	defer sqlDB.Close()
 
-	reg := scrape.NewRegistry(cfg.ScrapeConcurrency)
+	reg := scrape.NewRegistry(scrape.RegistryOptions{
+		ScrapeConcurrency: cfg.ScrapeConcurrency,
+		ChromePath:        cfg.ChromePath,
+	})
 	client := telegram.NewClient(cfg.TelegramBotToken, cfg.TelegramChatID)
 	if _, err := telegram.RunCheck(context.Background(), sqlDB, reg, client); err != nil {
 		log.Fatal(err)
