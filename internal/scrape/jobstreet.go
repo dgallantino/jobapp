@@ -39,14 +39,17 @@ type JobstreetAdapter struct {
 	ScrapeConcurrency int // max concurrent detail fetches per listing scrape
 }
 
-// NewJobstreetAdapter returns a JobStreet adapter using the default HTTP client.
+// NewJobstreetAdapter returns a JobStreet adapter using client (or DefaultHTTPClient if nil).
 // scrapeConcurrency caps concurrent detail-page fetches (minimum 1).
-func NewJobstreetAdapter(scrapeConcurrency int) *JobstreetAdapter {
+func NewJobstreetAdapter(client *http.Client, scrapeConcurrency int) *JobstreetAdapter {
 	if scrapeConcurrency < 1 {
 		scrapeConcurrency = 1
 	}
+	if client == nil {
+		client = DefaultHTTPClient()
+	}
 	return &JobstreetAdapter{
-		Client:            DefaultHTTPClient(),
+		Client:            client,
 		ScrapeConcurrency: scrapeConcurrency,
 	}
 }

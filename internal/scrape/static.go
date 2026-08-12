@@ -28,9 +28,12 @@ type StaticAdapter struct {
 	Client *http.Client
 }
 
-// NewStaticAdapter returns the default static HTML adapter.
-func NewStaticAdapter() *StaticAdapter {
-	return &StaticAdapter{Client: DefaultHTTPClient()}
+// NewStaticAdapter returns a static HTML adapter using client (or DefaultHTTPClient if nil).
+func NewStaticAdapter(client *http.Client) *StaticAdapter {
+	if client == nil {
+		client = DefaultHTTPClient()
+	}
+	return &StaticAdapter{Client: client}
 }
 
 func (a *StaticAdapter) Name() string { return "static" }

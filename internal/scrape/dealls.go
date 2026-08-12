@@ -43,14 +43,17 @@ type DeallsAdapter struct {
 	ScrapeConcurrency int
 }
 
-// NewDeallsAdapter returns a Dealls adapter using the default HTTP client.
+// NewDeallsAdapter returns a Dealls adapter using client (or DefaultHTTPClient if nil).
 // scrapeConcurrency caps concurrent detail-page fetches (minimum 1).
-func NewDeallsAdapter(scrapeConcurrency int) *DeallsAdapter {
+func NewDeallsAdapter(client *http.Client, scrapeConcurrency int) *DeallsAdapter {
 	if scrapeConcurrency < 1 {
 		scrapeConcurrency = 1
 	}
+	if client == nil {
+		client = DefaultHTTPClient()
+	}
 	return &DeallsAdapter{
-		Client:            DefaultHTTPClient(),
+		Client:            client,
 		ScrapeConcurrency: scrapeConcurrency,
 	}
 }

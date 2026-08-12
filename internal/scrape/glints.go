@@ -44,21 +44,27 @@ var glintsReservedJobSegments = map[string]struct{}{
 // appear after hydration (no session cookies).
 type GlintsAdapter struct {
 	Client            *http.Client
-	ScrapeConcurrency int    // max concurrent detail fetches per listing scrape
-	ChromePath        string // optional Chromium/Chrome binary for chromedp
+	ScrapeConcurrency int     // max concurrent detail fetches per listing scrape
+	ChromePath        string  // optional Chromium/Chrome binary for chromedp
+	Limiter           Limiter // paces chromedp listing navigates (HTTP uses Client transport)
 }
 
-// NewGlintsAdapter returns a Glints adapter using the default HTTP client.
+// NewGlintsAdapter returns a Glints adapter using client (or DefaultHTTPClient if nil).
 // scrapeConcurrency caps concurrent detail-page fetches (minimum 1).
 // chromePath, when set, is passed to chromedp.ExecPath for listing renders.
-func NewGlintsAdapter(scrapeConcurrency int, chromePath string) *GlintsAdapter {
+// limiter paces chromedp listing navigates; nil skips that wait.
+func NewGlintsAdapter(client *http.Client, scrapeConcurrency int, chromePath string, limiter Limiter) *GlintsAdapter {
 	if scrapeConcurrency < 1 {
 		scrapeConcurrency = 1
 	}
+	if client == nil {
+		client = DefaultHTTPClient()
+	}
 	return &GlintsAdapter{
-		Client:            DefaultHTTPClient(),
+		Client:            client,
 		ScrapeConcurrency: scrapeConcurrency,
 		ChromePath:        strings.TrimSpace(chromePath),
+		Limiter:           limiter,
 	}
 }
 
@@ -95,6 +101,12 @@ func (a *GlintsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, er
 // renderListingPage navigates to an explore listing URL with headless Chromium
 // and returns the rendered outer HTML plus the final location URL.
 func (a *GlintsAdapter) renderListingPage(ctx context.Context, pageURL string) (html string, finalURL string, err error) {
+	if a.Limiter != nil {
+		if err := a.Limiter.Wait(ctx, pageURL); err != nil {
+			return "", "", err
+		}
+	}
+
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, glintsListingRenderTimeout)

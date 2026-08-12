@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"jobapp/internal/config"
 	"jobapp/internal/db"
@@ -59,6 +60,12 @@ Serve flags:
   -db PATH             SQLite database path
   -idle-timeout DUR    Exit after idle duration (0 disables; e.g. 5m)
 
+Crawl flags:
+  -db PATH             SQLite database path
+  -rate-min DUR        Min delay between requests to the same host (default 2s)
+  -rate-max DUR        Max delay between requests to the same host (default 5s)
+                       Set both to 0 to disable rate limiting
+
 `)
 }
 
@@ -96,6 +103,8 @@ func runServe(cfg config.Config, args []string) int {
 func runCrawl(cfg config.Config, args []string) int {
 	fs := flag.NewFlagSet("crawl", flag.ExitOnError)
 	dbPath := fs.String("db", cfg.DBPath, "SQLite database path")
+	rateMin := fs.Duration("rate-min", 2*time.Second, "min delay between requests to the same host")
+	rateMax := fs.Duration("rate-max", 5*time.Second, "max delay between requests to the same host")
 	_ = fs.Parse(args)
 
 	sqlDB, err := db.Open(*dbPath)
@@ -104,9 +113,18 @@ func runCrawl(cfg config.Config, args []string) int {
 	}
 	defer sqlDB.Close()
 
+	var limiter scrape.Limiter
+	if *rateMin != 0 || *rateMax != 0 {
+		limiter, err = scrape.NewHostLimiter(*rateMin, *rateMax)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	reg := scrape.NewRegistry(scrape.RegistryOptions{
 		ScrapeConcurrency: cfg.ScrapeConcurrency,
 		ChromePath:        cfg.ChromePath,
+		Limiter:           limiter,
 	})
 	if _, err := scrape.RunCrawl(context.Background(), sqlDB, reg); err != nil {
 		log.Fatal(err)

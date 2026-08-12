@@ -96,7 +96,7 @@ func ScrapeAndStore(ctx context.Context, db *sql.DB, reg *Registry, rawURL strin
 	}
 	// If listing returned many and none match, scrape as detail via static.
 	if picked.SourceURL != rawURL && picked.Description == "" {
-		static := NewStaticAdapter()
+		static := NewStaticAdapter(nil)
 		detail, err := static.Scrape(ctx, rawURL)
 		if err != nil {
 			return models.JobAd{}, false, err

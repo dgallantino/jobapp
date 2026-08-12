@@ -166,7 +166,7 @@ func TestGlintsAdapter_ListingEnrichesDetails(t *testing.T) {
 		t.Fatalf("got %d stubs, want 2", len(stubs))
 	}
 
-	a := NewGlintsAdapter(2, "")
+	a := NewGlintsAdapter(nil, 2, "", nil)
 	a.Client = srv.Client()
 	ads := a.enrichListingDetails(context.Background(), stubs)
 
@@ -217,7 +217,7 @@ func TestGlintsAdapter_ScrapeDetailOnly(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	a := NewGlintsAdapter(1, "")
+	a := NewGlintsAdapter(nil, 1, "", nil)
 	a.Client = srv.Client()
 
 	ads, err := a.Scrape(context.Background(), srv.URL+path+"?utm_referrer=explore")
