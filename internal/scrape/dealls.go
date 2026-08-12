@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -39,18 +38,18 @@ var deallsReservedJobSlugs = map[string]struct{}{
 // Detail path: /loker/{job-slug}~{company-slug}.
 // Description: Deskripsi Pekerjaan (responsibilities) + Kualifikasi (requirements).
 type DeallsAdapter struct {
-	Client            *http.Client
+	Client            *Client
 	ScrapeConcurrency int
 }
 
-// NewDeallsAdapter returns a Dealls adapter using client (or DefaultHTTPClient if nil).
+// NewDeallsAdapter returns a Dealls adapter using client (or NewClient defaults if nil).
 // scrapeConcurrency caps concurrent detail-page fetches (minimum 1).
-func NewDeallsAdapter(client *http.Client, scrapeConcurrency int) *DeallsAdapter {
+func NewDeallsAdapter(client *Client, scrapeConcurrency int) *DeallsAdapter {
 	if scrapeConcurrency < 1 {
 		scrapeConcurrency = 1
 	}
 	if client == nil {
-		client = DefaultHTTPClient()
+		client = NewClient(ClientOptions{})
 	}
 	return &DeallsAdapter{
 		Client:            client,
@@ -61,7 +60,7 @@ func NewDeallsAdapter(client *http.Client, scrapeConcurrency int) *DeallsAdapter
 func (a *DeallsAdapter) Name() string { return "dealls" }
 
 func (a *DeallsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
-	doc, finalURL, err := fetchDocument(ctx, a.Client, pageURL)
+	doc, finalURL, err := a.Client.FetchDocument(ctx, pageURL)
 	if err != nil {
 		return nil, fmt.Errorf("dealls: %w", err)
 	}
@@ -114,7 +113,7 @@ func (a *DeallsAdapter) enrichListingDetails(ctx context.Context, ads []JobAd) [
 			if err := ctx.Err(); err != nil {
 				return
 			}
-			doc, finalURL, err := fetchDocument(ctx, a.Client, stub.SourceURL)
+			doc, finalURL, err := a.Client.FetchDocument(ctx, stub.SourceURL)
 			if err != nil {
 				log.Printf("dealls: detail %s: %v", stub.SourceURL, err)
 				return
@@ -306,8 +305,8 @@ type deallsNextData struct {
 }
 
 type deallsRQQuery struct {
-	QueryKey []any          `json:"queryKey"`
-	State    deallsRQState  `json:"state"`
+	QueryKey []any         `json:"queryKey"`
+	State    deallsRQState `json:"state"`
 }
 
 type deallsRQState struct {

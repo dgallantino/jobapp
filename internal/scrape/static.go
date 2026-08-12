@@ -2,7 +2,6 @@ package scrape
 
 import (
 	"context"
-	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
@@ -25,13 +24,13 @@ var salaryTextRE = regexp.MustCompile(`(?i)(?:` +
 
 // StaticAdapter uses net/http + goquery for server-rendered pages.
 type StaticAdapter struct {
-	Client *http.Client
+	Client *Client
 }
 
-// NewStaticAdapter returns a static HTML adapter using client (or DefaultHTTPClient if nil).
-func NewStaticAdapter(client *http.Client) *StaticAdapter {
+// NewStaticAdapter returns a static HTML adapter using client (or NewClient defaults if nil).
+func NewStaticAdapter(client *Client) *StaticAdapter {
 	if client == nil {
-		client = DefaultHTTPClient()
+		client = NewClient(ClientOptions{})
 	}
 	return &StaticAdapter{Client: client}
 }
@@ -42,7 +41,7 @@ func (a *StaticAdapter) Name() string { return "static" }
 // it returns one JobAd per discovered absolute job-like link (title from link text).
 // Otherwise it treats the URL as a single job detail page.
 func (a *StaticAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
-	doc, finalURL, err := fetchDocument(ctx, a.Client, pageURL)
+	doc, finalURL, err := a.Client.FetchDocument(ctx, pageURL)
 	if err != nil {
 		return nil, err
 	}

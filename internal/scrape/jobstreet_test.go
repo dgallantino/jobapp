@@ -193,8 +193,7 @@ func TestJobstreetAdapter_ScrapeListingEnrichesDetails(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	a := NewJobstreetAdapter(nil, 2)
-	a.Client = srv.Client()
+	a := NewJobstreetAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 2)
 
 	ads, err := a.Scrape(context.Background(), srv.URL+"/id/backend-developer-jobs")
 	if err != nil {

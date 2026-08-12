@@ -122,11 +122,3 @@ func TestHostLimiterRefillInRange(t *testing.T) {
 		}
 	}
 }
-
-func TestRateLimitedHTTPClientNil(t *testing.T) {
-	t.Parallel()
-	c := RateLimitedHTTPClient(nil)
-	if c == nil || c.Timeout == 0 {
-		t.Fatal("expected default client")
-	}
-}

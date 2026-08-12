@@ -3,7 +3,6 @@ package scrape
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -44,12 +43,15 @@ func NewRegistry(opts RegistryOptions) *Registry {
 	if opts.ScrapeConcurrency < 1 {
 		opts.ScrapeConcurrency = 1
 	}
-	client := RateLimitedHTTPClient(opts.Limiter)
+	client := NewClient(ClientOptions{
+		Limiter:    opts.Limiter,
+		ChromePath: opts.ChromePath,
+	})
 	r := &Registry{byName: map[string]Adapter{}}
 	for _, a := range []Adapter{
 		NewStaticAdapter(client),
 		NewJobstreetAdapter(client, opts.ScrapeConcurrency),
-		NewGlintsAdapter(client, opts.ScrapeConcurrency, opts.ChromePath, opts.Limiter),
+		NewGlintsAdapter(client, opts.ScrapeConcurrency),
 		NewDeallsAdapter(client, opts.ScrapeConcurrency),
 	} {
 		r.byName[a.Name()] = a
@@ -89,9 +91,4 @@ func (r *Registry) Resolve(rawURL string) Adapter {
 		}
 	}
 	return r.byName["static"]
-}
-
-// DefaultHTTPClient is shared by adapters.
-func DefaultHTTPClient() *http.Client {
-	return &http.Client{Timeout: 45 * time.Second}
 }

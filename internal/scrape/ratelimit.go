@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -103,42 +102,4 @@ func hostKey(rawURL string) string {
 		return strings.ToLower(strings.TrimSpace(rawURL))
 	}
 	return strings.ToLower(u.Hostname())
-}
-
-// limitingTransport waits on Limiter before each request.
-type limitingTransport struct {
-	limiter Limiter
-	base    http.RoundTripper
-}
-
-func (t *limitingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	base := t.base
-	if base == nil {
-		base = http.DefaultTransport
-	}
-	if t.limiter != nil {
-		raw := ""
-		if req.URL != nil {
-			raw = req.URL.String()
-		}
-		if err := t.limiter.Wait(req.Context(), raw); err != nil {
-			return nil, err
-		}
-	}
-	return base.RoundTrip(req)
-}
-
-// RateLimitedHTTPClient returns an HTTP client that paces requests via limiter.
-// If limiter is nil, returns DefaultHTTPClient().
-func RateLimitedHTTPClient(limiter Limiter) *http.Client {
-	if limiter == nil {
-		return DefaultHTTPClient()
-	}
-	return &http.Client{
-		Timeout: 45 * time.Second,
-		Transport: &limitingTransport{
-			limiter: limiter,
-			base:    http.DefaultTransport,
-		},
-	}
 }

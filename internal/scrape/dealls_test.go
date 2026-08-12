@@ -163,8 +163,7 @@ func TestDeallsAdapter_ScrapeListingEnrichesDetails(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	a := NewDeallsAdapter(nil, 2)
-	a.Client = srv.Client()
+	a := NewDeallsAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 2)
 
 	ads, err := a.Scrape(context.Background(), srv.URL+"/?searchJob=developer")
 	if err != nil {
@@ -211,8 +210,7 @@ func TestDeallsAdapter_ScrapeDetailOnly(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	a := NewDeallsAdapter(nil, 1)
-	a.Client = srv.Client()
+	a := NewDeallsAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 1)
 
 	ads, err := a.Scrape(context.Background(), srv.URL+"/loker/senior-compliance-manager~fintureid")
 	if err != nil {
