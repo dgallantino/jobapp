@@ -17,6 +17,9 @@ import (
 const (
 	deallsSalaryNegotiable = "Negotiable"
 	deallsSalaryUnpaid     = "Unpaid"
+	deallsMaxListingJobs   = 100
+	deallsDefaultAPIBase   = "https://api.sejutacita.id"
+	deallsExplorePageSize  = 18
 )
 
 // deallsDetailPathRE matches /loker/{job-slug}~{company-slug}.
@@ -33,13 +36,15 @@ var deallsReservedJobSlugs = map[string]struct{}{
 // Dealls (dealls.com) is Next.js with React Query. First-page listing cards and
 // detail content are SSR'd into HTML and __NEXT_DATA__ — plain HTTP + goquery
 // is enough (no chromedp). Listing "Lebih Banyak" loads further pages via
-// api.sejutacita.id; this adapter only scrapes the first page (~18 jobs).
+// anonymous GET api.sejutacita.id/v1/explore-job/job?page=N (HTML ?page= is a no-op).
+// This adapter walks API pages until deallsMaxListingJobs or totalPages.
 //
 // Detail path: /loker/{job-slug}~{company-slug}.
 // Description: Deskripsi Pekerjaan (responsibilities) + Kualifikasi (requirements).
 type DeallsAdapter struct {
 	Client            *Client
 	ScrapeConcurrency int
+	APIBase           string // optional; default https://api.sejutacita.id (tests override)
 }
 
 // NewDeallsAdapter returns a Dealls adapter using client (or NewClient defaults if nil).
@@ -55,6 +60,14 @@ func NewDeallsAdapter(client *Client, scrapeConcurrency int) *DeallsAdapter {
 		Client:            client,
 		ScrapeConcurrency: scrapeConcurrency,
 	}
+}
+
+func (a *DeallsAdapter) apiBase() string {
+	base := strings.TrimSpace(a.APIBase)
+	if base == "" {
+		return deallsDefaultAPIBase
+	}
+	return strings.TrimRight(base, "/")
 }
 
 func (a *DeallsAdapter) Name() string { return "dealls" }
@@ -73,11 +86,174 @@ func (a *DeallsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, er
 		return []JobAd{ad}, nil
 	}
 
-	ads := parseDeallsListing(doc, finalURL)
-	if len(ads) == 0 {
-		return nil, fmt.Errorf("dealls: no jobs found at %s", finalURL)
+	ads, err := a.scrapeListingPages(ctx, doc, finalURL)
+	if err != nil {
+		return nil, err
 	}
 	return a.enrichListingDetails(ctx, ads), nil
+}
+
+// scrapeListingPages takes SSR page-1 stubs, then walks api.sejutacita.id explore
+// pages until the job cap, empty page, or last totalPages. Deduplicates by SourceURL.
+func (a *DeallsAdapter) scrapeListingPages(ctx context.Context, doc *goquery.Document, pageURL string) ([]JobAd, error) {
+	seen := map[string]struct{}{}
+	var out []JobAd
+
+	pageAds := parseDeallsListing(doc, pageURL)
+	if len(pageAds) == 0 {
+		return nil, fmt.Errorf("dealls: no jobs found at %s", pageURL)
+	}
+	for _, ad := range pageAds {
+		if _, ok := seen[ad.SourceURL]; ok {
+			continue
+		}
+		seen[ad.SourceURL] = struct{}{}
+		out = append(out, ad)
+		if len(out) >= deallsMaxListingJobs {
+			return out[:deallsMaxListingJobs], nil
+		}
+	}
+
+	search := deallsSearchFromListingURL(pageURL)
+	siteBase, err := url.Parse(pageURL)
+	if err != nil {
+		return out, nil
+	}
+	siteOrigin := siteBase.Scheme + "://" + siteBase.Host
+
+	for page := 2; ; page++ {
+		if err := ctx.Err(); err != nil {
+			return out, err
+		}
+		apiURL := deallsExploreAPIURL(a.apiBase(), search, page)
+		body, _, err := a.Client.FetchBytes(ctx, apiURL)
+		if err != nil {
+			log.Printf("dealls: next page %s: %v", apiURL, err)
+			break
+		}
+		docs, pageNum, totalPages, ok := parseDeallsExploreAPIResponse(body)
+		if !ok {
+			log.Printf("dealls: next page %s: unparseable response", apiURL)
+			break
+		}
+		if len(docs) == 0 {
+			break
+		}
+
+		added := 0
+		for _, ad := range deallsAdsFromJobs(docs, siteOrigin) {
+			if _, ok := seen[ad.SourceURL]; ok {
+				continue
+			}
+			seen[ad.SourceURL] = struct{}{}
+			out = append(out, ad)
+			added++
+			if len(out) >= deallsMaxListingJobs {
+				return out[:deallsMaxListingJobs], nil
+			}
+		}
+		if added == 0 {
+			break
+		}
+		if pageNum >= totalPages {
+			break
+		}
+	}
+
+	if len(out) == 0 {
+		return nil, fmt.Errorf("dealls: no jobs found at %s", pageURL)
+	}
+	return out, nil
+}
+
+func deallsSearchFromListingURL(pageURL string) string {
+	u, err := url.Parse(pageURL)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(u.Query().Get("searchJob"))
+}
+
+func deallsExploreAPIURL(apiBase, search string, page int) string {
+	u, err := url.Parse(apiBase + "/v1/explore-job/job")
+	if err != nil {
+		return apiBase + "/v1/explore-job/job"
+	}
+	q := u.Query()
+	q.Set("page", strconv.Itoa(page))
+	q.Set("limit", strconv.Itoa(deallsExplorePageSize))
+	q.Set("search", search)
+	q.Set("sortParam", "mostRelevant")
+	q.Set("sortBy", "asc")
+	q.Set("boostTheBoostedJob", "true")
+	q.Set("published", "true")
+	q.Set("status", "active")
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+type deallsExploreAPIEnvelope struct {
+	Code int `json:"code"`
+	Data struct {
+		Docs       []deallsJobJSON `json:"docs"`
+		Page       int             `json:"page"`
+		TotalPages int             `json:"totalPages"`
+		TotalDocs  int             `json:"totalDocs"`
+	} `json:"data"`
+}
+
+func parseDeallsExploreAPIResponse(body []byte) (docs []deallsJobJSON, page, totalPages int, ok bool) {
+	var env deallsExploreAPIEnvelope
+	if err := json.Unmarshal(body, &env); err != nil {
+		return nil, 0, 0, false
+	}
+	if env.Code != 0 && env.Code != 200 {
+		return nil, 0, 0, false
+	}
+	return env.Data.Docs, env.Data.Page, env.Data.TotalPages, true
+}
+
+func deallsAdsFromJobs(jobs []deallsJobJSON, siteOrigin string) []JobAd {
+	base, err := url.Parse(siteOrigin + "/")
+	if err != nil {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	var out []JobAd
+	for _, job := range jobs {
+		href := deallsJobHref(job.Slug, job.Company)
+		if href == "" {
+			continue
+		}
+		abs, err := base.Parse(href)
+		if err != nil {
+			continue
+		}
+		canonical := canonicalizeDeallsURL(abs.String())
+		if canonical == "" || !isDeallsDetailURL(canonical) {
+			continue
+		}
+		if _, ok := seen[canonical]; ok {
+			continue
+		}
+		seen[canonical] = struct{}{}
+
+		title := normalizeDeallsText(job.Role)
+		if title == "" {
+			title = canonical
+		}
+		company := ""
+		if job.Company != nil {
+			company = normalizeDeallsText(job.Company.Name)
+		}
+		out = append(out, JobAd{
+			SourceURL: canonical,
+			Title:     title,
+			Company:   company,
+			Salary:    formatDeallsSalary(job.SalaryType, job.SalaryRange),
+		})
+	}
+	return out
 }
 
 // enrichListingDetails fetches each listing stub's detail page concurrently

@@ -13,8 +13,10 @@ import (
 )
 
 const (
-	glintsSalaryUndisclosed = "Salary Undisclosed"
-	glintsJobCardSelector   = `[data-gtm-job-id]`
+	glintsSalaryUndisclosed  = "Salary Undisclosed"
+	glintsJobCardSelector    = `[data-gtm-job-id]`
+	glintsLoginNudgeSelector = `#see-more-jobs-login-nudge`
+	glintsMaxListingJobs     = 100
 )
 
 // glintsDetailPathRE matches Glints job detail paths such as:
@@ -36,8 +38,9 @@ var glintsReservedJobSegments = map[string]struct{}{
 // Detail pages SSR job content (h1, data-gtm-company-name, JobOverview salary,
 // JobDescriptionsc__DescriptionContainer) — plain HTTP + goquery is enough.
 // Explore listing pages hydrate job cards client-side; GraphQL is login-gated /
-// 403 for anonymous clients, so listing uses chromedp and scrapes whatever cards
-// appear after hydration (no session cookies).
+// 403 for anonymous clients (page>=2), so listing uses chromedp, scrolls until
+// glintsMaxListingJobs, the login nudge (#see-more-jobs-login-nudge), or card
+// count stalls. Anonymous yield is typically ~30 jobs.
 type GlintsAdapter struct {
 	Client            *Client
 	ScrapeConcurrency int // max concurrent detail fetches per listing scrape
@@ -73,7 +76,7 @@ func (a *GlintsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, er
 		return []JobAd{ad}, nil
 	}
 
-	html, finalURL, err := a.Client.Render(ctx, pageURL, glintsJobCardSelector)
+	html, finalURL, err := a.Client.RenderListing(ctx, pageURL, glintsJobCardSelector, glintsLoginNudgeSelector, glintsMaxListingJobs)
 	if err != nil {
 		return nil, fmt.Errorf("glints: %w", err)
 	}
@@ -84,6 +87,9 @@ func (a *GlintsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, er
 	ads := parseGlintsListing(doc, finalURL)
 	if len(ads) == 0 {
 		return nil, fmt.Errorf("glints: no jobs found at %s", finalURL)
+	}
+	if len(ads) > glintsMaxListingJobs {
+		ads = ads[:glintsMaxListingJobs]
 	}
 	return a.enrichListingDetails(ctx, ads), nil
 }

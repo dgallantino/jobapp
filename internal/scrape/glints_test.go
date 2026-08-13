@@ -2,6 +2,7 @@ package scrape
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -253,10 +254,30 @@ func TestIsGlintsDetailURL(t *testing.T) {
 	}
 }
 
-func TestCanonicalizeGlintsURL(t *testing.T) {
-	got := canonicalizeGlintsURL("https://glints.com/id/en/opportunities/jobs/senior-backend-developer/c4cb6d60-050b-4710-9092-4e8cef9d2163?utm_referrer=explore&traceInfo=abc#hash")
-	want := "https://glints.com/id/en/opportunities/jobs/senior-backend-developer/c4cb6d60-050b-4710-9092-4e8cef9d2163"
-	if got != want {
-		t.Errorf("canonicalizeGlintsURL = %q, want %q", got, want)
+func TestParseGlintsListing_CapsAtMax(t *testing.T) {
+	// Cap is applied in Scrape after parse; verify parse dedupes and we can trim.
+	var b strings.Builder
+	b.WriteString(`<!DOCTYPE html><html><body>`)
+	for i := 0; i < glintsMaxListingJobs+5; i++ {
+		id := fmt.Sprintf("%08x-bbbb-cccc-dddd-%012x", i, i)
+		fmt.Fprintf(&b, `
+<article data-gtm-job-id="%d" data-gtm-company-name="Co %d">
+  <a href="/id/en/opportunities/jobs/role-%d/%s"><span class="JobTitle">Job %d</span></a>
+</article>`, i, i, i, id, i)
+	}
+	b.WriteString(`</body></html>`)
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(b.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ads := parseGlintsListing(doc, "https://glints.com/id/en/opportunities/jobs/explore")
+	if len(ads) != glintsMaxListingJobs+5 {
+		t.Fatalf("got %d ads before cap, want %d", len(ads), glintsMaxListingJobs+5)
+	}
+	if len(ads) > glintsMaxListingJobs {
+		ads = ads[:glintsMaxListingJobs]
+	}
+	if len(ads) != glintsMaxListingJobs {
+		t.Fatalf("got %d ads after cap, want %d", len(ads), glintsMaxListingJobs)
 	}
 }

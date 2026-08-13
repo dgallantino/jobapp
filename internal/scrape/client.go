@@ -13,8 +13,11 @@ import (
 )
 
 const (
-	defaultUserAgent     = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-	defaultRenderTimeout = 45 * time.Second
+	defaultUserAgent            = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	defaultRenderTimeout        = 45 * time.Second
+	defaultRenderListingTimeout = 90 * time.Second
+	renderListingMaxRounds      = 20
+	renderListingScrollPause    = 800 * time.Millisecond
 )
 
 // Client wraps net/http and chromedp for scrape outbound work, pacing both via Limiter.
@@ -48,6 +51,20 @@ func NewClient(opts ClientOptions) *Client {
 // FetchDocument GETs pageURL and parses the response body with goquery.
 // The returned finalURL is the post-redirect request URL when available.
 func (c *Client) FetchDocument(ctx context.Context, pageURL string) (*goquery.Document, string, error) {
+	body, finalURL, err := c.FetchBytes(ctx, pageURL)
+	if err != nil {
+		return nil, "", err
+	}
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(body)))
+	if err != nil {
+		return nil, "", err
+	}
+	return doc, finalURL, nil
+}
+
+// FetchBytes GETs pageURL and returns the response body.
+// The returned finalURL is the post-redirect request URL when available.
+func (c *Client) FetchBytes(ctx context.Context, pageURL string) ([]byte, string, error) {
 	if err := c.wait(ctx, pageURL); err != nil {
 		return nil, "", err
 	}
@@ -67,7 +84,7 @@ func (c *Client) FetchDocument(ctx context.Context, pageURL string) (*goquery.Do
 		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil, "", fmt.Errorf("HTTP %d for %s", resp.StatusCode, pageURL)
 	}
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, "", err
 	}
@@ -75,19 +92,44 @@ func (c *Client) FetchDocument(ctx context.Context, pageURL string) (*goquery.Do
 	if resp.Request != nil && resp.Request.URL != nil {
 		final = resp.Request.URL.String()
 	}
-	return doc, final, nil
+	return body, final, nil
 }
 
 // Render navigates to pageURL with headless Chromium, waits until waitReadySelector
 // is ready, and returns the rendered outer HTML plus the final location URL.
 func (c *Client) Render(ctx context.Context, pageURL, waitReadySelector string) (html string, finalURL string, err error) {
+	return c.render(ctx, pageURL, waitReadySelector, defaultRenderTimeout, nil)
+}
+
+// RenderListing navigates to pageURL, waits until cardSelector is ready, then
+// scrolls until maxCards are present, stopSelector appears, card count stalls,
+// or the round limit is hit. Returns the final outer HTML and location URL.
+func (c *Client) RenderListing(ctx context.Context, pageURL, cardSelector, stopSelector string, maxCards int) (html string, finalURL string, err error) {
+	if maxCards < 1 {
+		maxCards = 1
+	}
+	scroll := &renderListingOpts{
+		cardSelector: cardSelector,
+		stopSelector: stopSelector,
+		maxCards:     maxCards,
+	}
+	return c.render(ctx, pageURL, cardSelector, defaultRenderListingTimeout, scroll)
+}
+
+type renderListingOpts struct {
+	cardSelector string
+	stopSelector string
+	maxCards     int
+}
+
+func (c *Client) render(ctx context.Context, pageURL, waitReadySelector string, defaultTimeout time.Duration, scroll *renderListingOpts) (html string, finalURL string, err error) {
 	if err := c.wait(ctx, pageURL); err != nil {
 		return "", "", err
 	}
 
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultRenderTimeout)
+		ctx, cancel = context.WithTimeout(ctx, defaultTimeout)
 		defer cancel()
 	}
 
@@ -106,13 +148,23 @@ func (c *Client) Render(ctx context.Context, pageURL, waitReadySelector string) 
 	tabCtx, tabCancel := chromedp.NewContext(allocCtx)
 	defer tabCancel()
 
-	var outerHTML, loc string
-	err = chromedp.Run(tabCtx,
+	actions := []chromedp.Action{
 		chromedp.Navigate(pageURL),
 		chromedp.WaitReady(waitReadySelector, chromedp.ByQuery),
+	}
+	if scroll != nil {
+		actions = append(actions, chromedp.ActionFunc(func(ctx context.Context) error {
+			return scrollListingUntil(ctx, scroll)
+		}))
+	}
+
+	var outerHTML, loc string
+	actions = append(actions,
 		chromedp.OuterHTML("html", &outerHTML, chromedp.ByQuery),
 		chromedp.Location(&loc),
 	)
+
+	err = chromedp.Run(tabCtx, actions...)
 	if err != nil {
 		return "", "", fmt.Errorf("chromedp render %s: %w", pageURL, err)
 	}
@@ -120,6 +172,49 @@ func (c *Client) Render(ctx context.Context, pageURL, waitReadySelector string) 
 		loc = pageURL
 	}
 	return outerHTML, loc, nil
+}
+
+func scrollListingUntil(ctx context.Context, opts *renderListingOpts) error {
+	prev := -1
+	for round := 0; round < renderListingMaxRounds; round++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		var stopPresent bool
+		if opts.stopSelector != "" {
+			if err := chromedp.Evaluate(fmt.Sprintf(
+				`!!document.querySelector(%q)`, opts.stopSelector,
+			), &stopPresent).Do(ctx); err != nil {
+				return err
+			}
+			if stopPresent {
+				return nil
+			}
+		}
+
+		var count int
+		if err := chromedp.Evaluate(fmt.Sprintf(
+			`document.querySelectorAll(%q).length`, opts.cardSelector,
+		), &count).Do(ctx); err != nil {
+			return err
+		}
+		if count >= opts.maxCards {
+			return nil
+		}
+		if count == prev {
+			return nil
+		}
+		prev = count
+
+		if err := chromedp.Evaluate(`window.scrollTo(0, document.body.scrollHeight)`, nil).Do(ctx); err != nil {
+			return err
+		}
+		if err := chromedp.Sleep(renderListingScrollPause).Do(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Client) wait(ctx context.Context, pageURL string) error {

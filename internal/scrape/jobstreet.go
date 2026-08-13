@@ -14,7 +14,10 @@ import (
 	"golang.org/x/net/html"
 )
 
-const jobstreetSalaryUndisclosed = "Salary Undisclosed"
+const (
+	jobstreetSalaryUndisclosed = "Salary Undisclosed"
+	jobstreetMaxListingJobs    = 100
+)
 
 // jobDetailPathRE matches Seek/JobStreet detail paths:
 // /job/{id} and locale-prefixed /id/job/{id} (and similar country codes).
@@ -30,6 +33,7 @@ var jobDetailPathRE = regexp.MustCompile(`(?i)^(?:/[a-z]{2})?/job/(\d+)/?$`)
 // Detail: job-detail-title, advertiser-name, job-detail-salary, jobAdDetails.
 // Listing cards: normalJob wrappers with jobTitle, jobCompany, jobSalary and
 // job-list-view-job-link hrefs under /id/job/{id}.
+// Listing pagination: a[rel~=next] with ?page=N (disabled next uses aria-hidden=true).
 //
 // Prefer these selectors over StaticAdapter heuristics (og:site_name is the
 // board name "Jobstreet Indonesia", not the employer).
@@ -69,11 +73,104 @@ func (a *JobstreetAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd,
 		return []JobAd{ad}, nil
 	}
 
-	ads := parseJobstreetListing(doc, finalURL)
-	if len(ads) == 0 {
-		return nil, fmt.Errorf("jobstreet: no jobs found at %s", finalURL)
+	ads, err := a.scrapeListingPages(ctx, doc, finalURL)
+	if err != nil {
+		return nil, err
 	}
 	return a.enrichListingDetails(ctx, ads), nil
+}
+
+// scrapeListingPages walks listing pagination via rel=next until the job cap,
+// no usable next link, or an empty page. Deduplicates by canonical SourceURL.
+func (a *JobstreetAdapter) scrapeListingPages(ctx context.Context, doc *goquery.Document, pageURL string) ([]JobAd, error) {
+	seen := map[string]struct{}{}
+	var out []JobAd
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return out, err
+		}
+
+		pageAds := parseJobstreetListing(doc, pageURL)
+		if len(pageAds) == 0 {
+			if len(out) == 0 {
+				return nil, fmt.Errorf("jobstreet: no jobs found at %s", pageURL)
+			}
+			break
+		}
+
+		added := 0
+		for _, ad := range pageAds {
+			if _, ok := seen[ad.SourceURL]; ok {
+				continue
+			}
+			seen[ad.SourceURL] = struct{}{}
+			out = append(out, ad)
+			added++
+			if len(out) >= jobstreetMaxListingJobs {
+				return out[:jobstreetMaxListingJobs], nil
+			}
+		}
+		if added == 0 {
+			// All cards were duplicates of earlier pages; stop to avoid loops.
+			break
+		}
+
+		nextURL, ok := jobstreetNextPageURL(doc, pageURL)
+		if !ok {
+			break
+		}
+
+		nextDoc, nextFinal, err := a.Client.FetchDocument(ctx, nextURL)
+		if err != nil {
+			log.Printf("jobstreet: next page %s: %v", nextURL, err)
+			break
+		}
+		doc = nextDoc
+		pageURL = nextFinal
+	}
+
+	if len(out) == 0 {
+		return nil, fmt.Errorf("jobstreet: no jobs found at %s", pageURL)
+	}
+	return out, nil
+}
+
+// jobstreetNextPageURL returns the absolute URL of a usable pagination next link.
+// Disabled next controls (aria-hidden="true") are ignored.
+func jobstreetNextPageURL(doc *goquery.Document, currentURL string) (string, bool) {
+	base, err := url.Parse(currentURL)
+	if err != nil {
+		return "", false
+	}
+
+	var nextHref string
+	doc.Find(`a[rel~="next"]`).Each(func(_ int, a *goquery.Selection) {
+		if nextHref != "" {
+			return
+		}
+		if strings.EqualFold(strings.TrimSpace(a.AttrOr("aria-hidden", "")), "true") {
+			return
+		}
+		href, ok := a.Attr("href")
+		if !ok {
+			return
+		}
+		href = strings.TrimSpace(href)
+		if href == "" {
+			return
+		}
+		nextHref = href
+	})
+	if nextHref == "" {
+		return "", false
+	}
+
+	abs, err := base.Parse(nextHref)
+	if err != nil {
+		return "", false
+	}
+	return abs.String(), true
 }
 
 // enrichListingDetails fetches each listing card's detail page concurrently

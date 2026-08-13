@@ -11,10 +11,10 @@ import (
 
 // CrawlResult summarizes one crawl pass.
 type CrawlResult struct {
-	Sources   int
-	NewAds    int
-	Skipped   int
-	Errors    int
+	Sources int
+	NewAds  int
+	Skipped int
+	Errors  int
 }
 
 // RunCrawl loads enabled sources, scrapes each, upserts job_ads.
