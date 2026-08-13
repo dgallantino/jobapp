@@ -1,0 +1,18 @@
+{
+  "code": 200,
+  "data": {
+    "docs": [
+      {
+        "id": "3",
+        "slug": "android-developer-sr-specialist",
+        "role": "Android Developer Sr. Specialist",
+        "salaryType": "paid",
+        "salaryRange": {"start": 12000000, "end": 18000000},
+        "company": {"name": "Example Mobile Co", "slug": "example-mobile-co"}
+      }
+    ],
+    "page": 2,
+    "totalPages": 2,
+    "totalDocs": 3
+  }
+}

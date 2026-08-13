@@ -4,21 +4,19 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/chromedp/chromedp"
 )
 
 const (
-	glintsSalaryUndisclosed   = "Salary Undisclosed"
-	glintsListingRenderTimeout = 45 * time.Second
-	glintsJobCardSelector      = `[data-gtm-job-id]`
+	glintsSalaryUndisclosed  = "Salary Undisclosed"
+	glintsJobCardSelector    = `[data-gtm-job-id]`
+	glintsLoginNudgeSelector = `#see-more-jobs-login-nudge`
+	glintsMaxListingJobs     = 100
 )
 
 // glintsDetailPathRE matches Glints job detail paths such as:
@@ -40,25 +38,26 @@ var glintsReservedJobSegments = map[string]struct{}{
 // Detail pages SSR job content (h1, data-gtm-company-name, JobOverview salary,
 // JobDescriptionsc__DescriptionContainer) — plain HTTP + goquery is enough.
 // Explore listing pages hydrate job cards client-side; GraphQL is login-gated /
-// 403 for anonymous clients, so listing uses chromedp and scrapes whatever cards
-// appear after hydration (no session cookies).
+// 403 for anonymous clients (page>=2), so listing uses chromedp, scrolls until
+// glintsMaxListingJobs, the login nudge (#see-more-jobs-login-nudge), or card
+// count stalls. Anonymous yield is typically ~30 jobs.
 type GlintsAdapter struct {
-	Client            *http.Client
-	ScrapeConcurrency int    // max concurrent detail fetches per listing scrape
-	ChromePath        string // optional Chromium/Chrome binary for chromedp
+	Client            *Client
+	ScrapeConcurrency int // max concurrent detail fetches per listing scrape
 }
 
-// NewGlintsAdapter returns a Glints adapter using the default HTTP client.
+// NewGlintsAdapter returns a Glints adapter using client (or NewClient defaults if nil).
 // scrapeConcurrency caps concurrent detail-page fetches (minimum 1).
-// chromePath, when set, is passed to chromedp.ExecPath for listing renders.
-func NewGlintsAdapter(scrapeConcurrency int, chromePath string) *GlintsAdapter {
+func NewGlintsAdapter(client *Client, scrapeConcurrency int) *GlintsAdapter {
 	if scrapeConcurrency < 1 {
 		scrapeConcurrency = 1
 	}
+	if client == nil {
+		client = NewClient(ClientOptions{})
+	}
 	return &GlintsAdapter{
-		Client:            DefaultHTTPClient(),
+		Client:            client,
 		ScrapeConcurrency: scrapeConcurrency,
-		ChromePath:        strings.TrimSpace(chromePath),
 	}
 }
 
@@ -66,7 +65,7 @@ func (a *GlintsAdapter) Name() string { return "glints" }
 
 func (a *GlintsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
 	if isGlintsDetailURL(pageURL) {
-		doc, finalURL, err := fetchDocument(ctx, a.Client, pageURL)
+		doc, finalURL, err := a.Client.FetchDocument(ctx, pageURL)
 		if err != nil {
 			return nil, fmt.Errorf("glints: %w", err)
 		}
@@ -77,7 +76,7 @@ func (a *GlintsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, er
 		return []JobAd{ad}, nil
 	}
 
-	html, finalURL, err := a.renderListingPage(ctx, pageURL)
+	html, finalURL, err := a.Client.RenderListing(ctx, pageURL, glintsJobCardSelector, glintsLoginNudgeSelector, glintsMaxListingJobs)
 	if err != nil {
 		return nil, fmt.Errorf("glints: %w", err)
 	}
@@ -89,47 +88,10 @@ func (a *GlintsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, er
 	if len(ads) == 0 {
 		return nil, fmt.Errorf("glints: no jobs found at %s", finalURL)
 	}
+	if len(ads) > glintsMaxListingJobs {
+		ads = ads[:glintsMaxListingJobs]
+	}
 	return a.enrichListingDetails(ctx, ads), nil
-}
-
-// renderListingPage navigates to an explore listing URL with headless Chromium
-// and returns the rendered outer HTML plus the final location URL.
-func (a *GlintsAdapter) renderListingPage(ctx context.Context, pageURL string) (html string, finalURL string, err error) {
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, glintsListingRenderTimeout)
-		defer cancel()
-	}
-
-	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.UserAgent(defaultUserAgent),
-	)
-	if a.ChromePath != "" {
-		allocOpts = append(allocOpts, chromedp.ExecPath(a.ChromePath))
-	}
-	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, allocOpts...)
-	defer allocCancel()
-
-	tabCtx, tabCancel := chromedp.NewContext(allocCtx)
-	defer tabCancel()
-
-	var outerHTML, loc string
-	err = chromedp.Run(tabCtx,
-		chromedp.Navigate(pageURL),
-		chromedp.WaitReady(glintsJobCardSelector, chromedp.ByQuery),
-		chromedp.OuterHTML("html", &outerHTML, chromedp.ByQuery),
-		chromedp.Location(&loc),
-	)
-	if err != nil {
-		return "", "", fmt.Errorf("chromedp listing %s: %w", pageURL, err)
-	}
-	if loc == "" {
-		loc = pageURL
-	}
-	return outerHTML, loc, nil
 }
 
 // enrichListingDetails fetches each listing stub's detail page concurrently
@@ -165,7 +127,7 @@ func (a *GlintsAdapter) enrichListingDetails(ctx context.Context, ads []JobAd) [
 			if err := ctx.Err(); err != nil {
 				return
 			}
-			doc, finalURL, err := fetchDocument(ctx, a.Client, stub.SourceURL)
+			doc, finalURL, err := a.Client.FetchDocument(ctx, stub.SourceURL)
 			if err != nil {
 				log.Printf("glints: detail %s: %v", stub.SourceURL, err)
 				return

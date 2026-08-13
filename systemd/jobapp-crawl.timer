@@ -3,10 +3,7 @@ Description=Run jobapp crawl on a schedule
 Documentation=file:///opt/jobapp/README.md
 
 [Timer]
-# Default: hourly. Change OnCalendar to adjust, e.g.:
-#   OnCalendar=*-*-* *:0/30:00   # every 30 minutes
-#   OnCalendar=*-*-* 08,20:00:00 # twice daily
-OnCalendar=hourly
+OnCalendar=*-*-* 20:00:00
 Persistent=true
 RandomizedDelaySec=2m
 

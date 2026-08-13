@@ -2,6 +2,7 @@ package scrape
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -163,8 +164,45 @@ func TestParseJobstreetListing(t *testing.T) {
 	}
 }
 
+func TestJobstreetNextPageURL(t *testing.T) {
+	base := "https://id.jobstreet.com/id/backend-developer-jobs"
+
+	t.Run("present", func(t *testing.T) {
+		doc := loadJobstreetFixture(t, "jobstreet_listing.html")
+		got, ok := jobstreetNextPageURL(doc, base)
+		if !ok {
+			t.Fatal("expected next page URL")
+		}
+		want := "https://id.jobstreet.com/id/backend-developer-jobs?page=2"
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("disabled aria-hidden", func(t *testing.T) {
+		doc := loadJobstreetFixture(t, "jobstreet_listing_page2.html")
+		if _, ok := jobstreetNextPageURL(doc, base+"?page=2"); ok {
+			t.Fatal("disabled next link should be ignored")
+		}
+	})
+
+	t.Run("absent", func(t *testing.T) {
+		doc, err := goquery.NewDocumentFromReader(strings.NewReader(`<html><body><article data-automation="normalJob"></article></body></html>`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := jobstreetNextPageURL(doc, base); ok {
+			t.Fatal("expected no next page")
+		}
+	})
+}
+
 func TestJobstreetAdapter_ScrapeListingEnrichesDetails(t *testing.T) {
 	listingHTML, err := os.ReadFile(filepath.Join("testdata", "jobstreet_listing.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	listingPage2HTML, err := os.ReadFile(filepath.Join("testdata", "jobstreet_listing_page2.html"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,6 +218,10 @@ func TestJobstreetAdapter_ScrapeListingEnrichesDetails(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/id/backend-developer-jobs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if r.URL.Query().Get("page") == "2" {
+			_, _ = w.Write(listingPage2HTML)
+			return
+		}
 		_, _ = w.Write(listingHTML)
 	})
 	mux.HandleFunc("/id/job/93713877", func(w http.ResponseWriter, r *http.Request) {
@@ -190,18 +232,28 @@ func TestJobstreetAdapter_ScrapeListingEnrichesDetails(t *testing.T) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(detailNoSalary)
 	})
+	mux.HandleFunc("/id/job/94000001", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`
+			<html><body>
+				<h1 data-automation="job-detail-title">Frontend Developer</h1>
+				<span data-automation="advertiser-name">PT Example Page Two</span>
+				<span data-automation="job-detail-salary">Rp 8.000.000 – Rp 12.000.000 per month</span>
+				<div data-automation="jobAdDetails">Build UI components.</div>
+			</body></html>
+		`))
+	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	a := NewJobstreetAdapter(2)
-	a.Client = srv.Client()
+	a := NewJobstreetAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 2)
 
 	ads, err := a.Scrape(context.Background(), srv.URL+"/id/backend-developer-jobs")
 	if err != nil {
 		t.Fatalf("Scrape: %v", err)
 	}
-	if len(ads) != 2 {
-		t.Fatalf("got %d ads, want 2", len(ads))
+	if len(ads) != 3 {
+		t.Fatalf("got %d ads, want 3 (page1+page2)", len(ads))
 	}
 
 	if got, want := ads[0].SourceURL, srv.URL+"/id/job/93713877"; got != want {
@@ -226,6 +278,87 @@ func TestJobstreetAdapter_ScrapeListingEnrichesDetails(t *testing.T) {
 	if !strings.Contains(ads[1].Description, "Experience with Odoo") {
 		t.Errorf("ads[1].Description missing detail snippet: %q", ads[1].Description)
 	}
+
+	if got, want := ads[2].SourceURL, srv.URL+"/id/job/94000001"; got != want {
+		t.Errorf("ads[2].SourceURL = %q, want %q", got, want)
+	}
+	if got, want := ads[2].Title, "Frontend Developer"; got != want {
+		t.Errorf("ads[2].Title = %q, want %q", got, want)
+	}
+	if !strings.Contains(ads[2].Description, "Build UI components") {
+		t.Errorf("ads[2].Description missing detail snippet: %q", ads[2].Description)
+	}
+}
+
+func TestJobstreetAdapter_ScrapeListingCapsAt100(t *testing.T) {
+	// Two listing pages with 60 unique jobs each and a live next link on page 1.
+	// Enrichment is skipped by returning non-detail HTML for job URLs so the
+	// test stays focused on the listing cap.
+	page1 := jobstreetListingHTML(1, 60, true)
+	page2 := jobstreetListingHTML(61, 60, true)
+
+	var page2Hits int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/id/developer-jobs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if r.URL.Query().Get("page") == "2" {
+			page2Hits++
+			_, _ = w.Write([]byte(page2))
+			return
+		}
+		_, _ = w.Write([]byte(page1))
+	})
+	mux.HandleFunc("/id/job/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<html><body><p>not a detail</p></body></html>`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	a := NewJobstreetAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 4)
+	ads, err := a.Scrape(context.Background(), srv.URL+"/id/developer-jobs")
+	if err != nil {
+		t.Fatalf("Scrape: %v", err)
+	}
+	if len(ads) != jobstreetMaxListingJobs {
+		t.Fatalf("got %d ads, want %d", len(ads), jobstreetMaxListingJobs)
+	}
+	if page2Hits != 1 {
+		t.Fatalf("page2 hits = %d, want 1", page2Hits)
+	}
+	seen := map[string]struct{}{}
+	for _, ad := range ads {
+		if _, ok := seen[ad.SourceURL]; ok {
+			t.Fatalf("duplicate SourceURL %q", ad.SourceURL)
+		}
+		seen[ad.SourceURL] = struct{}{}
+	}
+}
+
+func jobstreetListingHTML(startID, count int, withNext bool) string {
+	var b strings.Builder
+	b.WriteString("<!DOCTYPE html><html><body>")
+	for i := 0; i < count; i++ {
+		id := startID + i
+		fmt.Fprintf(&b, `
+<article data-automation="normalJob">
+  <a data-automation="job-list-view-job-link" href="/id/job/%d">overlay</a>
+  <a data-automation="jobTitle" href="/id/job/%d">Job %d</a>
+  <span data-automation="jobCompany">Company %d</span>
+</article>`, id, id, id, id)
+	}
+	if withNext {
+		nextPage := 2
+		if startID > 1 {
+			nextPage = 3
+		}
+		fmt.Fprintf(&b, `
+<nav>
+  <a href="/id/developer-jobs?page=%d" rel="nofollow next" aria-hidden="false">Next</a>
+</nav>`, nextPage)
+	}
+	b.WriteString("</body></html>")
+	return b.String()
 }
 
 func TestIsJobstreetDetailURL(t *testing.T) {

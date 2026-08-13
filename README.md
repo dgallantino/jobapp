@@ -141,8 +141,9 @@ You can also use a helper bot such as `@userinfobot` / `@getidsbot` in the group
 Adapters are data-driven via the `sources.adapter` column:
 
 - `static` — `net/http` + `goquery` (default)
-- `jobstreet` — SSR HTML listing cards + concurrent detail enrichment (`data-automation` selectors)
-- `glints` — chromedp renders explore listings (job cards after JS hydration), then HTTP + goquery detail enrichment (`textWithBreaks`). Host Chromium/Chrome must be on `PATH` for crawl sources using this adapter. Detail / telegram-check URLs do not need chromedp.
+- `jobstreet` — SSR HTML listing cards with `rel=next` pagination (cap 100) + concurrent detail enrichment (`data-automation` selectors)
+- `glints` — chromedp renders explore listings, scrolls until 100 jobs / login nudge / card-count stall (anonymous ceiling ~30), then HTTP + goquery detail enrichment (`textWithBreaks`). Host Chromium/Chrome must be on `PATH` for crawl sources using this adapter. Detail / telegram-check URLs do not need chromedp.
+- `dealls` — SSR `__NEXT_DATA__` page 1 + anonymous `api.sejutacita.id` explore pages until 100, then concurrent detail enrichment (Deskripsi Pekerjaan + Kualifikasi via `textWithBreaks`). No chromedp. Example source URL: `https://dealls.com/?searchJob=developer`.
 
 ## Assumptions / stubs (flagged in code)
 

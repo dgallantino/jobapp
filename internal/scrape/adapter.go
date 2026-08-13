@@ -3,7 +3,6 @@ package scrape
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -34,8 +33,9 @@ type Registry struct {
 
 // RegistryOptions configures built-in adapters.
 type RegistryOptions struct {
-	ScrapeConcurrency int    // max concurrent detail fetches per listing scrape
-	ChromePath        string // Chromium/Chrome binary for chromedp (Glints listing)
+	ScrapeConcurrency int     // max concurrent detail fetches per listing scrape
+	ChromePath        string  // Chromium/Chrome binary for chromedp (Glints listing only)
+	Limiter           Limiter // optional per-host rate limiter for crawl outbound work
 }
 
 // NewRegistry returns a registry with built-in adapters.
@@ -43,11 +43,16 @@ func NewRegistry(opts RegistryOptions) *Registry {
 	if opts.ScrapeConcurrency < 1 {
 		opts.ScrapeConcurrency = 1
 	}
+	client := NewClient(ClientOptions{
+		Limiter:    opts.Limiter,
+		ChromePath: opts.ChromePath,
+	})
 	r := &Registry{byName: map[string]Adapter{}}
 	for _, a := range []Adapter{
-		NewStaticAdapter(),
-		NewJobstreetAdapter(opts.ScrapeConcurrency),
-		NewGlintsAdapter(opts.ScrapeConcurrency, opts.ChromePath),
+		NewStaticAdapter(client),
+		NewJobstreetAdapter(client, opts.ScrapeConcurrency),
+		NewGlintsAdapter(client, opts.ScrapeConcurrency),
+		NewDeallsAdapter(client, opts.ScrapeConcurrency),
 	} {
 		r.byName[a.Name()] = a
 	}
@@ -80,11 +85,10 @@ func (r *Registry) Resolve(rawURL string) Adapter {
 		if a, ok := r.byName["glints"]; ok {
 			return a
 		}
+	case strings.Contains(host, "dealls"):
+		if a, ok := r.byName["dealls"]; ok {
+			return a
+		}
 	}
 	return r.byName["static"]
-}
-
-// DefaultHTTPClient is shared by adapters.
-func DefaultHTTPClient() *http.Client {
-	return &http.Client{Timeout: 45 * time.Second}
 }
