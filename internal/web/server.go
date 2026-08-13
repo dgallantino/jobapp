@@ -257,14 +257,46 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
+const jobsPageSize = 50
+
 func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
-	jobs, err := models.ListJobAds(r.Context(), s.DB, status)
+	page := 1
+	if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 1 {
+		page = p
+	}
+
+	total, err := models.CountJobAds(r.Context(), s.DB, status)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "jobs", viewData{"Authed": true, "Jobs": jobs, "Status": status})
+	totalPages := 0
+	if total > 0 {
+		totalPages = (total + jobsPageSize - 1) / jobsPageSize
+	}
+	if totalPages == 0 {
+		page = 1
+	} else if page > totalPages {
+		page = totalPages
+	}
+
+	jobs, err := models.ListJobAds(r.Context(), s.DB, status, jobsPageSize, (page-1)*jobsPageSize)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.render(w, "jobs", viewData{
+		"Authed":     true,
+		"Jobs":       jobs,
+		"Status":     status,
+		"Page":       page,
+		"TotalPages": totalPages,
+		"HasPrev":    page > 1,
+		"HasNext":    totalPages > 0 && page < totalPages,
+		"PrevURL":    jobsListPath(status, page-1),
+		"NextURL":    jobsListPath(status, page+1),
+	})
 }
 
 func (s *Server) handleJobDetail(w http.ResponseWriter, r *http.Request) {
@@ -328,7 +360,7 @@ func (s *Server) handleJobsBulkStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, jobsListPath(r.FormValue("filter")), http.StatusSeeOther)
+	http.Redirect(w, r, jobsListPath(r.FormValue("filter"), 1), http.StatusSeeOther)
 }
 
 func (s *Server) handleJobsBulkDelete(w http.ResponseWriter, r *http.Request) {
@@ -349,7 +381,7 @@ func (s *Server) handleJobsBulkDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, jobsListPath(r.FormValue("filter")), http.StatusSeeOther)
+	http.Redirect(w, r, jobsListPath(r.FormValue("filter"), 1), http.StatusSeeOther)
 }
 
 func parseFormJobIDs(r *http.Request) ([]int64, error) {
@@ -368,13 +400,19 @@ func parseFormJobIDs(r *http.Request) ([]int64, error) {
 	return ids, nil
 }
 
-func jobsListPath(filter string) string {
+func jobsListPath(filter string, page int) string {
+	var parts []string
 	switch filter {
 	case models.StatusNew, models.StatusApplied, models.StatusRejected, models.StatusIgnored:
-		return "/?status=" + filter
-	default:
+		parts = append(parts, "status="+filter)
+	}
+	if page > 1 {
+		parts = append(parts, "page="+strconv.Itoa(page))
+	}
+	if len(parts) == 0 {
 		return "/"
 	}
+	return "/?" + strings.Join(parts, "&")
 }
 
 func (s *Server) handleCoverLetter(w http.ResponseWriter, r *http.Request) {

@@ -189,6 +189,18 @@ button.danger { background: var(--danger); color: var(--on-accent); }
   margin-top: 0;
 }
 
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.pager a {
+  color: var(--accent);
+}
+
 .col-check {
   width: 2rem;
   text-align: center;

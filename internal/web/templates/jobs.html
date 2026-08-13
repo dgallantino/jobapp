@@ -64,5 +64,20 @@
     {{end}}
   </tbody>
 </table>
+{{if gt .TotalPages 1}}
+<nav class="pager" aria-label="Pagination">
+  {{if .HasPrev}}
+  <a href="{{.PrevURL}}">Prev</a>
+  {{else}}
+  <span class="muted">Prev</span>
+  {{end}}
+  <span class="muted">Page {{.Page}} of {{.TotalPages}}</span>
+  {{if .HasNext}}
+  <a href="{{.NextURL}}">Next</a>
+  {{else}}
+  <span class="muted">Next</span>
+  {{end}}
+</nav>
+{{end}}
 {{end}}
 {{end}}

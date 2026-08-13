@@ -9,7 +9,8 @@ import (
 )
 
 // ListJobAds returns job ads, optionally filtered by status, newest first.
-func ListJobAds(ctx context.Context, db *sql.DB, status string) ([]JobAd, error) {
+// limit and offset apply pagination (limit <= 0 returns no rows).
+func ListJobAds(ctx context.Context, db *sql.DB, status string, limit, offset int) ([]JobAd, error) {
 	q := `
 		SELECT j.id, j.source_id, j.source_url, j.title, j.company, j.salary, j.description,
 		       j.posted_at, j.scraped_at, j.status, COALESCE(s.name, '')
@@ -20,7 +21,8 @@ func ListJobAds(ctx context.Context, db *sql.DB, status string) ([]JobAd, error)
 		q += ` WHERE j.status = ?`
 		args = append(args, status)
 	}
-	q += ` ORDER BY j.scraped_at DESC, j.id DESC`
+	q += ` ORDER BY j.scraped_at DESC, j.id DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
 
 	rows, err := db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -37,6 +39,19 @@ func ListJobAds(ctx context.Context, db *sql.DB, status string) ([]JobAd, error)
 		out = append(out, ad)
 	}
 	return out, rows.Err()
+}
+
+// CountJobAds returns the number of job ads, optionally filtered by status.
+func CountJobAds(ctx context.Context, db *sql.DB, status string) (int, error) {
+	q := `SELECT COUNT(*) FROM job_ads`
+	args := []any{}
+	if status != "" {
+		q += ` WHERE status = ?`
+		args = append(args, status)
+	}
+	var n int
+	err := db.QueryRowContext(ctx, q, args...).Scan(&n)
+	return n, err
 }
 
 // GetJobAd returns a single job ad by id.
