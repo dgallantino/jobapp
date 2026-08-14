@@ -28,10 +28,7 @@
 </button>
 <div id="letters">
   {{range .Letters}}
-  <div class="letter">
-    <p class="muted">{{.Model}} · {{.CreatedAt.Format "2006-01-02 15:04"}}</p>
-    {{.Content}}
-  </div>
+  {{template "letter_partial" .}}
   {{end}}
 </div>
 {{end}}

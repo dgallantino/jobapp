@@ -91,7 +91,7 @@ func (s *Server) parseTemplates() error {
 	pages := []page{
 		{"login", []string{"templates/layout.html", "templates/login.html"}},
 		{"jobs", []string{"templates/layout.html", "templates/jobs.html", "templates/status_cell.html"}},
-		{"job_detail", []string{"templates/layout.html", "templates/job_detail.html", "templates/status_cell.html"}},
+		{"job_detail", []string{"templates/layout.html", "templates/job_detail.html", "templates/status_cell.html", "templates/letter_partial.html"}},
 		{"profile", []string{"templates/layout.html", "templates/profile.html"}},
 		{"sources", []string{"templates/layout.html", "templates/sources.html"}},
 		{"source_edit", []string{"templates/layout.html", "templates/source_edit.html"}},

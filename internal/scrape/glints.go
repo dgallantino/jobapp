@@ -100,10 +100,7 @@ func (a *GlintsAdapter) enrichListingDetails(ctx context.Context, ads []JobAd) [
 	if len(ads) == 0 {
 		return ads
 	}
-	concurrency := a.ScrapeConcurrency
-	if concurrency < 1 {
-		concurrency = 1
-	}
+	concurrency := max(a.ScrapeConcurrency, 1)
 
 	out := make([]JobAd, len(ads))
 	copy(out, ads)

@@ -35,7 +35,8 @@ INSERT OR IGNORE INTO profile (key, value) VALUES
     ('summary', ''),
     ('work_history', ''),
     ('skills', ''),
-    ('tone_preferences', '');
+    ('tone_preferences', ''),
+    ('signature', '');
 
 CREATE TABLE IF NOT EXISTS cover_letters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

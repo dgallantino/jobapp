@@ -72,7 +72,7 @@ func (c *Client) GenerateCoverLetter(ctx context.Context, profile map[string]str
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	req.Header.Set("HTTP-Referer", "https://localhost/jobapp")
+	req.Header.Set("HTTP-Referer", "jobapp.localhost")
 	req.Header.Set("X-Title", "jobapp")
 
 	resp, err := c.HTTP.Do(req)
@@ -98,7 +98,11 @@ func (c *Client) GenerateCoverLetter(ctx context.Context, profile map[string]str
 	if len(parsed.Choices) == 0 {
 		return "", fmt.Errorf("openrouter: empty choices")
 	}
-	return strings.TrimSpace(parsed.Choices[0].Message.Content), nil
+	content := strings.TrimSpace(parsed.Choices[0].Message.Content)
+	if sig := strings.TrimSpace(profile["signature"]); sig != "" {
+		content = content + "\n\n" + sig
+	}
+	return content, nil
 }
 
 // buildPrompt constructs system/user messages for cover letter generation.
@@ -108,6 +112,10 @@ func buildPrompt(profile map[string]string, title, company, description string) 
 	system = "You write concise, tailored cover letters for job applications. " +
 		"Use only the candidate profile and job description provided. " +
 		"Do not invent employers, degrees, or skills that are not in the profile. " +
+		"Pick skills from the profile: lead with those that best match the job description; " +
+		"if none match, choose ones recruiters generally value. " +
+		"End with a closing such as \"Sincerely,\" followed by blank line(s) for a signature; " +
+		"do not invent or write the signature text itself. " +
 		"Output the letter body only, no markdown fences."
 
 	var b strings.Builder
@@ -124,7 +132,7 @@ func buildPrompt(profile map[string]string, title, company, description string) 
 	// Include any extra profile keys not in the default list.
 	for k, v := range profile {
 		switch k {
-		case "full_name", "summary", "work_history", "skills", "tone_preferences":
+		case "full_name", "summary", "work_history", "skills", "tone_preferences", "signature":
 			continue
 		}
 		if strings.TrimSpace(v) == "" {

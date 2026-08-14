@@ -262,13 +262,28 @@ tr:last-child td { border-bottom: none; }
 }
 
 .letter {
-  white-space: pre-wrap;
   background: var(--letter-bg);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 1rem;
   margin: 0.75rem 0;
   font-size: 0.92rem;
+}
+
+.letter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.letter-header .muted {
+  margin: 0;
+}
+
+.letter-body {
+  white-space: pre-wrap;
 }
 
 .stack form > * + * { margin-top: 0.25rem; }
