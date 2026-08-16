@@ -145,6 +145,7 @@ func (s *Server) routes() http.Handler {
 	authed.HandleFunc("POST /sources", s.handleSourcesCreate)
 	authed.HandleFunc("GET /sources/{id}/edit", s.handleSourceEditGet)
 	authed.HandleFunc("POST /sources/{id}", s.handleSourceUpdate)
+	authed.HandleFunc("POST /sources/{id}/toggle", s.handleSourceToggle)
 	authed.HandleFunc("POST /sources/{id}/delete", s.handleSourceDelete)
 	authed.HandleFunc("POST /logout", s.handleLogout)
 
@@ -562,6 +563,19 @@ func (s *Server) handleSourceUpdate(w http.ResponseWriter, r *http.Request) {
 		strings.TrimSpace(r.FormValue("adapter")),
 		enabled,
 	); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/sources", http.StatusSeeOther)
+}
+
+func (s *Server) handleSourceToggle(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := models.ToggleSourceEnabled(r.Context(), s.DB, id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

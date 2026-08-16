@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -189,5 +190,33 @@ func TestLoginRedirectsToNewJobs(t *testing.T) {
 	}
 	if got := w.Header().Get("Location"); got != jobsDefaultListURL {
 		t.Fatalf("Location %q, want %q", got, jobsDefaultListURL)
+	}
+}
+
+func TestHandleSourceToggleFlipsEnabled(t *testing.T) {
+	srv, database := testServer(t)
+
+	id, err := models.CreateSource(t.Context(), database, "Example", "https://example.com/jobs", "static", true)
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+
+	req := authedRequest(t, srv, "POST", "/sources/"+strconv.FormatInt(id, 10)+"/toggle", nil)
+	w := httptest.NewRecorder()
+	srv.routes().ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status %d, want %d", w.Code, http.StatusSeeOther)
+	}
+	if got := w.Header().Get("Location"); got != "/sources" {
+		t.Fatalf("Location %q, want /sources", got)
+	}
+
+	src, err := models.GetSource(t.Context(), database, id)
+	if err != nil {
+		t.Fatalf("get source: %v", err)
+	}
+	if src.Enabled {
+		t.Fatal("expected source to be disabled after toggle")
 	}
 }
