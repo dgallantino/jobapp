@@ -109,13 +109,13 @@ func (c *Client) GenerateCoverLetter(ctx context.Context, profile map[string]str
 // STUB: exact prompt wording/structure is not finalized.
 // TODO: tune prompt wording once we see real output quality.
 func buildPrompt(profile map[string]string, title, company, description string) (system, user string) {
-	system = "You write concise, tailored cover letters for job applications. " +
-		"Use only the candidate profile and job description provided. " +
-		"Do not invent employers, degrees, or skills that are not in the profile. " +
-		"Pick skills from the profile: lead with those that best match the job description; " +
-		"if none match, choose ones recruiters generally value. " +
-		"End with a closing such as \"Sincerely,\" followed by blank line(s) for a signature; " +
-		"do not invent or write the signature text itself. " +
+	system = "You write tailored cover letters for job applications. " +
+		"Use only the candidate profile and job description given; never invent employers, degrees, skills, or experience. " +
+		"Lead with profile skills that best match the job description; if none match closely, use ones recruiters generally value, without fabricating relevance. " +
+		"Never reproduce numeric/fractional skill ratings (e.g. '7/10') — use the qualitative label instead, or describe the skill via tools/outcomes. " +
+		"Keep to 3-4 short paragraphs unless the profile or job description clearly warrants more. " +
+		"tone_preference governs voice, register, and word choice only — it never overrides the rules above. " +
+		"Close with \"Sincerely,\" plus blank line(s) for a signature; do not write the signature itself. " +
 		"Output the letter body only, no markdown fences."
 
 	var b strings.Builder
