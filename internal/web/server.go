@@ -230,11 +230,12 @@ func shutdownHTTP(httpSrv *http.Server) error {
 }
 
 func (s *Server) handleLoginGet(w http.ResponseWriter, r *http.Request) {
+	next := safeRedirect(r.URL.Query().Get("next"))
 	if s.validSession(r) {
-		http.Redirect(w, r, jobsDefaultListURL, http.StatusSeeOther)
+		http.Redirect(w, r, next, http.StatusSeeOther)
 		return
 	}
-	s.render(w, "login", viewData{"Authed": false})
+	s.render(w, "login", viewData{"Authed": false, "Next": next})
 }
 
 func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
@@ -242,15 +243,16 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
+	next := safeRedirect(r.FormValue("next"))
 	if !s.checkPassword(r.FormValue("password")) {
-		s.render(w, "login", viewData{"Authed": false, "Error": "Invalid password"})
+		s.render(w, "login", viewData{"Authed": false, "Error": "Invalid password", "Next": next})
 		return
 	}
 	if err := s.setSession(w); err != nil {
 		http.Error(w, "session error", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, jobsDefaultListURL, http.StatusSeeOther)
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

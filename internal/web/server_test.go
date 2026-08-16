@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -190,6 +191,101 @@ func TestLoginRedirectsToNewJobs(t *testing.T) {
 	}
 	if got := w.Header().Get("Location"); got != jobsDefaultListURL {
 		t.Fatalf("Location %q, want %q", got, jobsDefaultListURL)
+	}
+}
+
+func TestRequireAuthRedirectsWithNext(t *testing.T) {
+	srv, _ := testServer(t)
+
+	req := httptest.NewRequest("GET", "/jobs/1", nil)
+	w := httptest.NewRecorder()
+	srv.routes().ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status %d, want %d", w.Code, http.StatusSeeOther)
+	}
+	if got := w.Header().Get("Location"); got != "/login?next=%2Fjobs%2F1" {
+		t.Fatalf("Location %q, want /login?next=%%2Fjobs%%2F1", got)
+	}
+}
+
+func TestRequireAuthRedirectsPreservesQuery(t *testing.T) {
+	srv, _ := testServer(t)
+
+	req := httptest.NewRequest("GET", "/?status=all&page=2", nil)
+	w := httptest.NewRecorder()
+	srv.routes().ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status %d, want %d", w.Code, http.StatusSeeOther)
+	}
+	want := "/login?next=" + url.QueryEscape("/?status=all&page=2")
+	if got := w.Header().Get("Location"); got != want {
+		t.Fatalf("Location %q, want %q", got, want)
+	}
+}
+
+func TestLoginRedirectsToNext(t *testing.T) {
+	srv, _ := testServer(t)
+
+	req := httptest.NewRequest("POST", "/login", strings.NewReader("password=test&next=/sources"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	w := httptest.NewRecorder()
+	srv.routes().ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status %d, want %d", w.Code, http.StatusSeeOther)
+	}
+	if got := w.Header().Get("Location"); got != "/sources" {
+		t.Fatalf("Location %q, want /sources", got)
+	}
+}
+
+func TestLoginRejectsUnsafeNext(t *testing.T) {
+	srv, _ := testServer(t)
+
+	tests := []string{
+		"https://evil.example/",
+		"//evil.example/",
+		"/login",
+		"/logout",
+	}
+	for _, next := range tests {
+		body := "password=test&next=" + url.QueryEscape(next)
+		req := httptest.NewRequest("POST", "/login", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		w := httptest.NewRecorder()
+		srv.routes().ServeHTTP(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("next %q: status %d, want %d", next, w.Code, http.StatusSeeOther)
+		}
+		if got := w.Header().Get("Location"); got != jobsDefaultListURL {
+			t.Fatalf("next %q: Location %q, want %q", next, got, jobsDefaultListURL)
+		}
+	}
+}
+
+func TestSafeRedirect(t *testing.T) {
+	tests := []struct {
+		next string
+		want string
+	}{
+		{"", jobsDefaultListURL},
+		{"/jobs/1", "/jobs/1"},
+		{"/?status=all&page=2", "/?status=all&page=2"},
+		{"https://evil.example/", jobsDefaultListURL},
+		{"//evil.example/", jobsDefaultListURL},
+		{"/login", jobsDefaultListURL},
+		{"/logout", jobsDefaultListURL},
+		{"/path:with:colon", jobsDefaultListURL},
+	}
+	for _, tc := range tests {
+		if got := safeRedirect(tc.next); got != tc.want {
+			t.Errorf("safeRedirect(%q) = %q, want %q", tc.next, got, tc.want)
+		}
 	}
 }
 
