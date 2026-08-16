@@ -230,7 +230,7 @@ func shutdownHTTP(httpSrv *http.Server) error {
 
 func (s *Server) handleLoginGet(w http.ResponseWriter, r *http.Request) {
 	if s.validSession(r) {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, jobsDefaultListURL, http.StatusSeeOther)
 		return
 	}
 	s.render(w, "login", viewData{"Authed": false})
@@ -249,7 +249,7 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "session error", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, jobsDefaultListURL, http.StatusSeeOther)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -257,16 +257,33 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
-const jobsPageSize = 50
+const (
+	jobsPageSize       = 50
+	jobsStatusAll      = "all"
+	jobsDefaultListURL = "/?status=new"
+)
 
 func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
-	status := r.URL.Query().Get("status")
+	statusParam := r.URL.Query().Get("status")
+	if statusParam == "" {
+		q := r.URL.Query()
+		q.Set("status", models.StatusNew)
+		http.Redirect(w, r, "/?"+q.Encode(), http.StatusSeeOther)
+		return
+	}
+
+	displayStatus := statusParam
+	dbStatus := statusParam
+	if statusParam == jobsStatusAll {
+		dbStatus = ""
+	}
+
 	page := 1
 	if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 1 {
 		page = p
 	}
 
-	total, err := models.CountJobAds(r.Context(), s.DB, status)
+	total, err := models.CountJobAds(r.Context(), s.DB, dbStatus)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -281,7 +298,7 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 		page = totalPages
 	}
 
-	jobs, err := models.ListJobAds(r.Context(), s.DB, status, jobsPageSize, (page-1)*jobsPageSize)
+	jobs, err := models.ListJobAds(r.Context(), s.DB, dbStatus, jobsPageSize, (page-1)*jobsPageSize)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -289,13 +306,13 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "jobs", viewData{
 		"Authed":     true,
 		"Jobs":       jobs,
-		"Status":     status,
+		"Status":     displayStatus,
 		"Page":       page,
 		"TotalPages": totalPages,
 		"HasPrev":    page > 1,
 		"HasNext":    totalPages > 0 && page < totalPages,
-		"PrevURL":    jobsListPath(status, page-1),
-		"NextURL":    jobsListPath(status, page+1),
+		"PrevURL":    jobsListPath(displayStatus, page-1),
+		"NextURL":    jobsListPath(displayStatus, page+1),
 	})
 }
 
@@ -403,14 +420,15 @@ func parseFormJobIDs(r *http.Request) ([]int64, error) {
 func jobsListPath(filter string, page int) string {
 	var parts []string
 	switch filter {
+	case jobsStatusAll:
+		parts = append(parts, "status="+jobsStatusAll)
 	case models.StatusNew, models.StatusApplied, models.StatusRejected, models.StatusIgnored:
 		parts = append(parts, "status="+filter)
+	default:
+		parts = append(parts, "status="+models.StatusNew)
 	}
 	if page > 1 {
 		parts = append(parts, "page="+strconv.Itoa(page))
-	}
-	if len(parts) == 0 {
-		return "/"
 	}
 	return "/?" + strings.Join(parts, "&")
 }
