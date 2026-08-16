@@ -13,19 +13,26 @@ import (
 
 const openRouterURL = "https://openrouter.ai/api/v1/chat/completions"
 
+// defaultCoverLetterSystem is used when Client.SystemPrompt is empty.
+const defaultCoverLetterSystem = "You write tailored cover letters for job applications. " +
+	"Use only the candidate profile and job description given; never invent employers, degrees, skills, or experience. " +
+	"Output the letter body only, no markdown fences."
+
 // Client calls OpenRouter's OpenAI-compatible chat completions API.
 type Client struct {
-	APIKey string
-	Model  string
-	HTTP   *http.Client
+	APIKey       string
+	Model        string
+	SystemPrompt string // cover-letter system prompt; empty uses defaultCoverLetterSystem
+	HTTP         *http.Client
 }
 
 // NewClient constructs an OpenRouter client.
-func NewClient(apiKey, model string) *Client {
+func NewClient(apiKey, model, systemPrompt string) *Client {
 	return &Client{
-		APIKey: apiKey,
-		Model:  model,
-		HTTP:   &http.Client{Timeout: 120 * time.Second},
+		APIKey:       apiKey,
+		Model:        model,
+		SystemPrompt: strings.TrimSpace(systemPrompt),
+		HTTP:         &http.Client{Timeout: 120 * time.Second},
 	}
 }
 
@@ -53,7 +60,7 @@ func (c *Client) GenerateCoverLetter(ctx context.Context, profile map[string]str
 	if c.APIKey == "" {
 		return "", fmt.Errorf("OPENROUTER_API_KEY is not set")
 	}
-	system, user := buildPrompt(profile, title, company, description)
+	system, user := buildPrompt(c.coverLetterSystem(), profile, title, company, description)
 
 	body, err := json.Marshal(chatRequest{
 		Model: c.Model,
@@ -105,19 +112,17 @@ func (c *Client) GenerateCoverLetter(ctx context.Context, profile map[string]str
 	return content, nil
 }
 
-// buildPrompt constructs system/user messages for cover letter generation.
-// STUB: exact prompt wording/structure is not finalized.
-// TODO: tune prompt wording once we see real output quality.
-func buildPrompt(profile map[string]string, title, company, description string) (system, user string) {
-	system = "You write tailored cover letters for job applications. " +
-		"Use only the candidate profile and job description given; never invent employers, degrees, skills, or experience. " +
-		"Lead with profile skills that best match the job description; if none match closely, use ones recruiters generally value, without fabricating relevance. " +
-		"Never reproduce numeric/fractional skill ratings (e.g. '7/10') — use the qualitative label instead, or describe the skill via tools/outcomes. " +
-		"Keep to 3-4 short paragraphs unless the profile or job description clearly warrants more. " +
-		"tone_preference governs voice, register, and word choice only — it never overrides the rules above. " +
-		"Close with \"Sincerely,\" plus blank line(s) for a signature; do not write the signature itself. " +
-		"Output the letter body only, no markdown fences."
+func (c *Client) coverLetterSystem() string {
+	if c != nil {
+		if s := strings.TrimSpace(c.SystemPrompt); s != "" {
+			return s
+		}
+	}
+	return defaultCoverLetterSystem
+}
 
+// buildPrompt constructs system/user messages for cover letter generation.
+func buildPrompt(system string, profile map[string]string, title, company, description string) (string, string) {
 	var b strings.Builder
 	b.WriteString("Candidate profile:\n")
 	for _, key := range []string{"full_name", "summary", "work_history", "skills", "tone_preferences"} {
