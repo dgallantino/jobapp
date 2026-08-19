@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -110,6 +111,55 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		loginURL := loginPathWithNext(authReturnPath(r))
+		if r.Header.Get("HX-Request") == "true" {
+			w.Header().Set("HX-Redirect", loginURL)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		http.Redirect(w, r, loginURL, http.StatusSeeOther)
 	})
+}
+
+// authReturnPath is the path to resume after login. GETs use the requested URL;
+// mutating/HTMX requests fall back to Referer when it is a same-origin path.
+func authReturnPath(r *http.Request) string {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		return r.URL.RequestURI()
+	}
+	if ref := r.Referer(); ref != "" {
+		if u, err := url.Parse(ref); err == nil {
+			return u.RequestURI()
+		}
+	}
+	return ""
+}
+
+func loginPathWithNext(next string) string {
+	if safeNext := safeRedirect(next); safeNext != "" && safeNext != jobsDefaultListURL {
+		return "/login?next=" + url.QueryEscape(safeNext)
+	}
+	return "/login"
+}
+
+// safeRedirect returns next when it is a same-origin relative path suitable for
+// post-login redirect; otherwise it returns the default jobs list URL.
+func safeRedirect(next string) string {
+	if next == "" {
+		return jobsDefaultListURL
+	}
+	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+		return jobsDefaultListURL
+	}
+	if strings.ContainsAny(next, ":\\ \t\r\n") {
+		return jobsDefaultListURL
+	}
+	path := next
+	if i := strings.IndexAny(path, "?#"); i >= 0 {
+		path = path[:i]
+	}
+	if path == "/login" || path == "/logout" {
+		return jobsDefaultListURL
+	}
+	return next
 }

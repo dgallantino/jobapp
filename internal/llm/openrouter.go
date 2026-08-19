@@ -13,19 +13,26 @@ import (
 
 const openRouterURL = "https://openrouter.ai/api/v1/chat/completions"
 
+// defaultCoverLetterSystem is used when Client.SystemPrompt is empty.
+const defaultCoverLetterSystem = "You write tailored cover letters for job applications. " +
+	"Use only the candidate profile and job description given; never invent employers, degrees, skills, or experience. " +
+	"Output the letter body only, no markdown fences."
+
 // Client calls OpenRouter's OpenAI-compatible chat completions API.
 type Client struct {
-	APIKey string
-	Model  string
-	HTTP   *http.Client
+	APIKey       string
+	Model        string
+	SystemPrompt string // cover-letter system prompt; empty uses defaultCoverLetterSystem
+	HTTP         *http.Client
 }
 
 // NewClient constructs an OpenRouter client.
-func NewClient(apiKey, model string) *Client {
+func NewClient(apiKey, model, systemPrompt string) *Client {
 	return &Client{
-		APIKey: apiKey,
-		Model:  model,
-		HTTP:   &http.Client{Timeout: 120 * time.Second},
+		APIKey:       apiKey,
+		Model:        model,
+		SystemPrompt: strings.TrimSpace(systemPrompt),
+		HTTP:         &http.Client{Timeout: 120 * time.Second},
 	}
 }
 
@@ -53,7 +60,7 @@ func (c *Client) GenerateCoverLetter(ctx context.Context, profile map[string]str
 	if c.APIKey == "" {
 		return "", fmt.Errorf("OPENROUTER_API_KEY is not set")
 	}
-	system, user := buildPrompt(profile, title, company, description)
+	system, user := buildPrompt(c.coverLetterSystem(), profile, title, company, description)
 
 	body, err := json.Marshal(chatRequest{
 		Model: c.Model,
@@ -72,7 +79,7 @@ func (c *Client) GenerateCoverLetter(ctx context.Context, profile map[string]str
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.APIKey)
-	req.Header.Set("HTTP-Referer", "https://localhost/jobapp")
+	req.Header.Set("HTTP-Referer", "jobapp.localhost")
 	req.Header.Set("X-Title", "jobapp")
 
 	resp, err := c.HTTP.Do(req)
@@ -98,18 +105,24 @@ func (c *Client) GenerateCoverLetter(ctx context.Context, profile map[string]str
 	if len(parsed.Choices) == 0 {
 		return "", fmt.Errorf("openrouter: empty choices")
 	}
-	return strings.TrimSpace(parsed.Choices[0].Message.Content), nil
+	content := strings.TrimSpace(parsed.Choices[0].Message.Content)
+	if sig := strings.TrimSpace(profile["signature"]); sig != "" {
+		content = content + "\n\n" + sig
+	}
+	return content, nil
+}
+
+func (c *Client) coverLetterSystem() string {
+	if c != nil {
+		if s := strings.TrimSpace(c.SystemPrompt); s != "" {
+			return s
+		}
+	}
+	return defaultCoverLetterSystem
 }
 
 // buildPrompt constructs system/user messages for cover letter generation.
-// STUB: exact prompt wording/structure is not finalized.
-// TODO: tune prompt wording once we see real output quality.
-func buildPrompt(profile map[string]string, title, company, description string) (system, user string) {
-	system = "You write concise, tailored cover letters for job applications. " +
-		"Use only the candidate profile and job description provided. " +
-		"Do not invent employers, degrees, or skills that are not in the profile. " +
-		"Output the letter body only, no markdown fences."
-
+func buildPrompt(system string, profile map[string]string, title, company, description string) (string, string) {
 	var b strings.Builder
 	b.WriteString("Candidate profile:\n")
 	for _, key := range []string{"full_name", "summary", "work_history", "skills", "tone_preferences"} {
@@ -124,7 +137,7 @@ func buildPrompt(profile map[string]string, title, company, description string) 
 	// Include any extra profile keys not in the default list.
 	for k, v := range profile {
 		switch k {
-		case "full_name", "summary", "work_history", "skills", "tone_preferences":
+		case "full_name", "summary", "work_history", "skills", "tone_preferences", "signature":
 			continue
 		}
 		if strings.TrimSpace(v) == "" {

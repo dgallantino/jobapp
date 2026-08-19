@@ -2,7 +2,7 @@
 {{define "content"}}
 <h1>Job ads</h1>
 <div class="filters">
-  <a href="/" class="{{if eq .Status ""}}active{{end}}">All</a>
+  <a href="/?status=all" class="{{if eq .Status "all"}}active{{end}}">All</a>
   <a href="/?status=new" class="{{if eq .Status "new"}}active{{end}}">New</a>
   <a href="/?status=applied" class="{{if eq .Status "applied"}}active{{end}}">Applied</a>
   <a href="/?status=rejected" class="{{if eq .Status "rejected"}}active{{end}}">Rejected</a>
@@ -64,5 +64,20 @@
     {{end}}
   </tbody>
 </table>
+{{if gt .TotalPages 1}}
+<nav class="pager" aria-label="Pagination">
+  {{if .HasPrev}}
+  <a href="{{.PrevURL}}">Prev</a>
+  {{else}}
+  <span class="muted">Prev</span>
+  {{end}}
+  <span class="muted">Page {{.Page}} of {{.TotalPages}}</span>
+  {{if .HasNext}}
+  <a href="{{.NextURL}}">Next</a>
+  {{else}}
+  <span class="muted">Next</span>
+  {{end}}
+</nav>
+{{end}}
 {{end}}
 {{end}}

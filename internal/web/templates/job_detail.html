@@ -1,6 +1,6 @@
 {{define "title"}}{{.Job.Title}} · jobapp{{end}}
 {{define "content"}}
-<p class="muted"><a href="/">← Jobs</a></p>
+<p class="muted"><a href="/?status=new">← Jobs</a></p>
 <h1>{{.Job.Title}}</h1>
 <div class="detail-meta">
   <div><strong>Company:</strong> {{.Job.Company}}</div>
@@ -28,10 +28,7 @@
 </button>
 <div id="letters">
   {{range .Letters}}
-  <div class="letter">
-    <p class="muted">{{.Model}} · {{.CreatedAt.Format "2006-01-02 15:04"}}</p>
-    {{.Content}}
-  </div>
+  {{template "letter_partial" .}}
   {{end}}
 </div>
 {{end}}

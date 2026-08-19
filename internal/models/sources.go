@@ -90,6 +90,25 @@ func UpdateSource(ctx context.Context, db *sql.DB, id int64, name, url, adapter 
 	return nil
 }
 
+// ToggleSourceEnabled flips the enabled flag for a source.
+func ToggleSourceEnabled(ctx context.Context, db *sql.DB, id int64) error {
+	res, err := db.ExecContext(ctx,
+		`UPDATE sources SET enabled = CASE WHEN enabled = 1 THEN 0 ELSE 1 END WHERE id = ?`,
+		id,
+	)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("source %d not found", id)
+	}
+	return nil
+}
+
 // DeleteSource removes a source by id.
 func DeleteSource(ctx context.Context, db *sql.DB, id int64) error {
 	_, err := db.ExecContext(ctx, `DELETE FROM sources WHERE id = ?`, id)

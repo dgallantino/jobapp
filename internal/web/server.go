@@ -91,7 +91,7 @@ func (s *Server) parseTemplates() error {
 	pages := []page{
 		{"login", []string{"templates/layout.html", "templates/login.html"}},
 		{"jobs", []string{"templates/layout.html", "templates/jobs.html", "templates/status_cell.html"}},
-		{"job_detail", []string{"templates/layout.html", "templates/job_detail.html", "templates/status_cell.html"}},
+		{"job_detail", []string{"templates/layout.html", "templates/job_detail.html", "templates/status_cell.html", "templates/letter_partial.html"}},
 		{"profile", []string{"templates/layout.html", "templates/profile.html"}},
 		{"sources", []string{"templates/layout.html", "templates/sources.html"}},
 		{"source_edit", []string{"templates/layout.html", "templates/source_edit.html"}},
@@ -145,6 +145,7 @@ func (s *Server) routes() http.Handler {
 	authed.HandleFunc("POST /sources", s.handleSourcesCreate)
 	authed.HandleFunc("GET /sources/{id}/edit", s.handleSourceEditGet)
 	authed.HandleFunc("POST /sources/{id}", s.handleSourceUpdate)
+	authed.HandleFunc("POST /sources/{id}/toggle", s.handleSourceToggle)
 	authed.HandleFunc("POST /sources/{id}/delete", s.handleSourceDelete)
 	authed.HandleFunc("POST /logout", s.handleLogout)
 
@@ -229,11 +230,12 @@ func shutdownHTTP(httpSrv *http.Server) error {
 }
 
 func (s *Server) handleLoginGet(w http.ResponseWriter, r *http.Request) {
+	next := safeRedirect(r.URL.Query().Get("next"))
 	if s.validSession(r) {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, next, http.StatusSeeOther)
 		return
 	}
-	s.render(w, "login", viewData{"Authed": false})
+	s.render(w, "login", viewData{"Authed": false, "Next": next})
 }
 
 func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
@@ -241,15 +243,16 @@ func (s *Server) handleLoginPost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
+	next := safeRedirect(r.FormValue("next"))
 	if !s.checkPassword(r.FormValue("password")) {
-		s.render(w, "login", viewData{"Authed": false, "Error": "Invalid password"})
+		s.render(w, "login", viewData{"Authed": false, "Error": "Invalid password", "Next": next})
 		return
 	}
 	if err := s.setSession(w); err != nil {
 		http.Error(w, "session error", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -257,14 +260,63 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
+const (
+	jobsPageSize       = 50
+	jobsStatusAll      = "all"
+	jobsDefaultListURL = "/?status=new"
+)
+
 func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
-	status := r.URL.Query().Get("status")
-	jobs, err := models.ListJobAds(r.Context(), s.DB, status)
+	statusParam := r.URL.Query().Get("status")
+	if statusParam == "" {
+		q := r.URL.Query()
+		q.Set("status", models.StatusNew)
+		http.Redirect(w, r, "/?"+q.Encode(), http.StatusSeeOther)
+		return
+	}
+
+	displayStatus := statusParam
+	dbStatus := statusParam
+	if statusParam == jobsStatusAll {
+		dbStatus = ""
+	}
+
+	page := 1
+	if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 1 {
+		page = p
+	}
+
+	total, err := models.CountJobAds(r.Context(), s.DB, dbStatus)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "jobs", viewData{"Authed": true, "Jobs": jobs, "Status": status})
+	totalPages := 0
+	if total > 0 {
+		totalPages = (total + jobsPageSize - 1) / jobsPageSize
+	}
+	if totalPages == 0 {
+		page = 1
+	} else if page > totalPages {
+		page = totalPages
+	}
+
+	jobs, err := models.ListJobAds(r.Context(), s.DB, dbStatus, jobsPageSize, (page-1)*jobsPageSize)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.render(w, "jobs", viewData{
+		"Authed":     true,
+		"Jobs":       jobs,
+		"Status":     displayStatus,
+		"Page":       page,
+		"TotalPages": totalPages,
+		"HasPrev":    page > 1,
+		"HasNext":    totalPages > 0 && page < totalPages,
+		"PrevURL":    jobsListPath(displayStatus, page-1),
+		"NextURL":    jobsListPath(displayStatus, page+1),
+	})
 }
 
 func (s *Server) handleJobDetail(w http.ResponseWriter, r *http.Request) {
@@ -328,7 +380,7 @@ func (s *Server) handleJobsBulkStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, jobsListPath(r.FormValue("filter")), http.StatusSeeOther)
+	http.Redirect(w, r, jobsListPath(r.FormValue("filter"), 1), http.StatusSeeOther)
 }
 
 func (s *Server) handleJobsBulkDelete(w http.ResponseWriter, r *http.Request) {
@@ -349,7 +401,7 @@ func (s *Server) handleJobsBulkDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, jobsListPath(r.FormValue("filter")), http.StatusSeeOther)
+	http.Redirect(w, r, jobsListPath(r.FormValue("filter"), 1), http.StatusSeeOther)
 }
 
 func parseFormJobIDs(r *http.Request) ([]int64, error) {
@@ -368,13 +420,20 @@ func parseFormJobIDs(r *http.Request) ([]int64, error) {
 	return ids, nil
 }
 
-func jobsListPath(filter string) string {
+func jobsListPath(filter string, page int) string {
+	var parts []string
 	switch filter {
+	case jobsStatusAll:
+		parts = append(parts, "status="+jobsStatusAll)
 	case models.StatusNew, models.StatusApplied, models.StatusRejected, models.StatusIgnored:
-		return "/?status=" + filter
+		parts = append(parts, "status="+filter)
 	default:
-		return "/"
+		parts = append(parts, "status="+models.StatusNew)
 	}
+	if page > 1 {
+		parts = append(parts, "page="+strconv.Itoa(page))
+	}
+	return "/?" + strings.Join(parts, "&")
 }
 
 func (s *Server) handleCoverLetter(w http.ResponseWriter, r *http.Request) {
@@ -506,6 +565,19 @@ func (s *Server) handleSourceUpdate(w http.ResponseWriter, r *http.Request) {
 		strings.TrimSpace(r.FormValue("adapter")),
 		enabled,
 	); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/sources", http.StatusSeeOther)
+}
+
+func (s *Server) handleSourceToggle(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := models.ToggleSourceEnabled(r.Context(), s.DB, id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

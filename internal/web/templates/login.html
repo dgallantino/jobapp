@@ -5,6 +5,7 @@
   <p class="muted">Single-user access. Enter the site password.</p>
   {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
   <form method="post" action="/login">
+    {{if .Next}}<input type="hidden" name="next" value="{{.Next}}">{{end}}
     <label for="password">Password</label>
     <input id="password" name="password" type="password" required autofocus>
     <button type="submit">Sign in</button>

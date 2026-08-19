@@ -89,7 +89,7 @@ func runServe(cfg config.Config, args []string) int {
 	}
 	defer sqlDB.Close()
 
-	llmClient := llm.NewClient(cfg.OpenRouterAPIKey, cfg.OpenRouterModel)
+	llmClient := llm.NewClient(cfg.OpenRouterAPIKey, cfg.OpenRouterModel, cfg.OpenRouterSystemPrompt)
 	srv, err := web.New(sqlDB, cfg.SitePasswordHash, cfg.SessionSecret, llmClient)
 	if err != nil {
 		log.Fatal(err)
