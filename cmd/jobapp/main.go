@@ -125,6 +125,7 @@ func runCrawl(cfg config.Config, args []string) int {
 		ScrapeConcurrency: cfg.ScrapeConcurrency,
 		ChromePath:        cfg.ChromePath,
 		Limiter:           limiter,
+		LLM:               llm.NewClient(cfg.OpenRouterAPIKey, cfg.OpenRouterModel, cfg.OpenRouterSystemPrompt),
 	})
 	if _, err := scrape.RunCrawl(context.Background(), sqlDB, reg); err != nil {
 		log.Fatal(err)
@@ -146,6 +147,7 @@ func runTelegram(cfg config.Config, args []string) int {
 	reg := scrape.NewRegistry(scrape.RegistryOptions{
 		ScrapeConcurrency: cfg.ScrapeConcurrency,
 		ChromePath:        cfg.ChromePath,
+		LLM:               llm.NewClient(cfg.OpenRouterAPIKey, cfg.OpenRouterModel, cfg.OpenRouterSystemPrompt),
 	})
 	client := telegram.NewClient(cfg.TelegramBotToken, cfg.TelegramChatID)
 	if _, err := telegram.RunCheck(context.Background(), sqlDB, reg, client); err != nil {

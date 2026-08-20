@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"jobapp/internal/llm"
 )
 
 // JobAd is a scraped listing result (before DB insert).
@@ -33,9 +35,10 @@ type Registry struct {
 
 // RegistryOptions configures built-in adapters.
 type RegistryOptions struct {
-	ScrapeConcurrency int     // max concurrent detail fetches per listing scrape
-	ChromePath        string  // Chromium/Chrome binary for chromedp (Glints listing only)
-	Limiter           Limiter // optional per-host rate limiter for crawl outbound work
+	ScrapeConcurrency int         // max concurrent detail fetches per listing scrape
+	ChromePath        string      // Chromium/Chrome binary for chromedp (Glints listing only)
+	Limiter           Limiter     // optional per-host rate limiter for crawl outbound work
+	LLM               *llm.Client // optional; used by the Threads adapter to fill empty fields
 }
 
 // NewRegistry returns a registry with built-in adapters.
@@ -47,17 +50,25 @@ func NewRegistry(opts RegistryOptions) *Registry {
 		Limiter:    opts.Limiter,
 		ChromePath: opts.ChromePath,
 	})
+	var extractor FieldExtractor
+	if opts.LLM != nil {
+		extractor = opts.LLM
+	}
+
 	r := &Registry{byName: map[string]Adapter{}}
 	for _, a := range []Adapter{
 		NewStaticAdapter(client),
 		NewJobstreetAdapter(client, opts.ScrapeConcurrency),
 		NewGlintsAdapter(client, opts.ScrapeConcurrency),
 		NewDeallsAdapter(client, opts.ScrapeConcurrency),
+		NewThreadsAdapter(client, extractor),
 	} {
 		r.byName[a.Name()] = a
 	}
 	return r
 }
+
+var _ FieldExtractor = (*llm.Client)(nil)
 
 // Get returns an adapter by name.
 func (r *Registry) Get(name string) (Adapter, error) {
@@ -87,6 +98,10 @@ func (r *Registry) Resolve(rawURL string) Adapter {
 		}
 	case strings.Contains(host, "dealls"):
 		if a, ok := r.byName["dealls"]; ok {
+			return a
+		}
+	case isThreadsHost(host):
+		if a, ok := r.byName["threads"]; ok {
 			return a
 		}
 	}

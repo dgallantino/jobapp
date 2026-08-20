@@ -28,8 +28,8 @@ func RunCrawl(ctx context.Context, db *sql.DB, reg *Registry) (CrawlResult, erro
 	res.Sources = len(sources)
 
 	for _, src := range sources {
-		if src.Adapter == "telegram" {
-			// Telegram source is a marker for ads ingested via telegram-check, not a crawl target.
+		if src.Adapter == "telegram" || src.Adapter == "threads" {
+			// Telegram/Threads sources are markers for link-only ingest, not crawl targets.
 			continue
 		}
 		adapter, err := reg.Get(src.Adapter)
