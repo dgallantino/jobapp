@@ -179,7 +179,7 @@ func TestThreadsAdapter_ScrapeMergesLLMForEmptyFieldsOnly(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	stub := &stubExtractor{company: "Batam Goods", title: "should-not-overwrite", salary: "should-not-overwrite"}
-	adapter := NewThreadsAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), stub)
+	adapter := newThreadsAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), stub)
 
 	ads, err := adapter.Scrape(t.Context(), srv.URL+"/@job.board/post/AbC123xyz")
 	if err != nil {
@@ -217,7 +217,7 @@ func TestThreadsAdapter_LLMErrorKeepsRegex(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	stub := &stubExtractor{err: errors.New("boom"), company: "Nope"}
-	adapter := NewThreadsAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), stub)
+	adapter := newThreadsAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), stub)
 	ads, err := adapter.Scrape(t.Context(), srv.URL+"/@job.board/post/AbC123xyz")
 	if err != nil {
 		t.Fatalf("Scrape: %v", err)

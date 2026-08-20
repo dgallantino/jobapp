@@ -170,7 +170,7 @@ func TestDeallsAdapter_ScrapeListingEnrichesDetails(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	a := NewDeallsAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 2)
+	a := newDeallsAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 2)
 	a.APIBase = srv.URL
 
 	ads, err := a.Scrape(context.Background(), srv.URL+"/?searchJob=developer")
@@ -259,7 +259,7 @@ func TestDeallsAdapter_ScrapeListingWalksAPIPages(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	a := NewDeallsAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 2)
+	a := newDeallsAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 2)
 	a.APIBase = srv.URL
 
 	ads, err := a.Scrape(context.Background(), srv.URL+"/?searchJob=developer")
@@ -306,7 +306,7 @@ func TestDeallsAdapter_ScrapeListingCapsAt100(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	a := NewDeallsAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 4)
+	a := newDeallsAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 4)
 	a.APIBase = srv.URL
 
 	ads, err := a.Scrape(context.Background(), srv.URL+"/?searchJob=developer")
@@ -405,7 +405,7 @@ func TestDeallsAdapter_ScrapeDetailOnly(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	a := NewDeallsAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 1)
+	a := newDeallsAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 1)
 
 	ads, err := a.Scrape(context.Background(), srv.URL+"/loker/senior-compliance-manager~fintureid")
 	if err != nil {

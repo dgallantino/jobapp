@@ -31,30 +31,30 @@ var (
 	threadsRoleWordRE = regexp.MustCompile(`(?i)\b(staff|programmer|developer|engineer|manager|operator|assistant|analyst|designer|intern|officer|admin|administrasi|warehouse|production|packing|quality|marketing|finance|accounting)\b`)
 )
 
-// FieldExtractor fills empty job fields from unstructured text (e.g. an LLM).
-type FieldExtractor interface {
+// fieldExtractor fills empty job fields from unstructured text (e.g. an LLM).
+type fieldExtractor interface {
 	ExtractJobFields(ctx context.Context, postText string, missing []string) (title, company, salary string, err error)
 }
 
-// ThreadsAdapter parses a single Meta Threads post URL into one JobAd.
+// threadsAdapter parses a single Meta Threads post URL into one JobAd.
 // It is link-only: no listing crawl, no follow of links inside the caption.
-type ThreadsAdapter struct {
+type threadsAdapter struct {
 	Client    *Client
-	Extractor FieldExtractor
+	Extractor fieldExtractor
 }
 
-// NewThreadsAdapter returns a Threads adapter using client (or NewClient defaults if nil).
-func NewThreadsAdapter(client *Client, extractor FieldExtractor) *ThreadsAdapter {
+// newThreadsAdapter returns a Threads adapter using client (or NewClient defaults if nil).
+func newThreadsAdapter(client *Client, extractor fieldExtractor) *threadsAdapter {
 	if client == nil {
 		client = NewClient(ClientOptions{})
 	}
-	return &ThreadsAdapter{Client: client, Extractor: extractor}
+	return &threadsAdapter{Client: client, Extractor: extractor}
 }
 
-func (a *ThreadsAdapter) Name() string { return "threads" }
+func (a *threadsAdapter) Name() string { return "threads" }
 
 // Scrape fetches pageURL as a single Threads post and returns one JobAd.
-func (a *ThreadsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
+func (a *threadsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
 	html, finalURL, fetchErr := a.Client.FetchBytes(ctx, pageURL)
 	var (
 		ad      JobAd
@@ -82,7 +82,7 @@ func (a *ThreadsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, e
 	return []JobAd{ad}, nil
 }
 
-func (a *ThreadsAdapter) fillEmptyFields(ctx context.Context, ad *JobAd, caption string) {
+func (a *threadsAdapter) fillEmptyFields(ctx context.Context, ad *JobAd, caption string) {
 	if a == nil || a.Extractor == nil || strings.TrimSpace(caption) == "" {
 		return
 	}

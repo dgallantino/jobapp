@@ -23,7 +23,7 @@ const (
 // /job/{id} and locale-prefixed /id/job/{id} (and similar country codes).
 var jobDetailPathRE = regexp.MustCompile(`(?i)^(?:/[a-z]{2})?/job/(\d+)/?$`)
 
-// JobstreetAdapter scrapes JobStreet listing and detail pages.
+// jobstreetAdapter scrapes JobStreet listing and detail pages.
 //
 // Investigation notes (2026-08):
 // JobStreet (Seek Asia) id.jobstreet.com SSR HTML includes the job payload via
@@ -37,29 +37,29 @@ var jobDetailPathRE = regexp.MustCompile(`(?i)^(?:/[a-z]{2})?/job/(\d+)/?$`)
 //
 // Prefer these selectors over StaticAdapter heuristics (og:site_name is the
 // board name "Jobstreet Indonesia", not the employer).
-type JobstreetAdapter struct {
+type jobstreetAdapter struct {
 	Client            *Client
 	ScrapeConcurrency int // max concurrent detail fetches per listing scrape
 }
 
-// NewJobstreetAdapter returns a JobStreet adapter using client (or NewClient defaults if nil).
+// newJobstreetAdapter returns a JobStreet adapter using client (or NewClient defaults if nil).
 // scrapeConcurrency caps concurrent detail-page fetches (minimum 1).
-func NewJobstreetAdapter(client *Client, scrapeConcurrency int) *JobstreetAdapter {
+func newJobstreetAdapter(client *Client, scrapeConcurrency int) *jobstreetAdapter {
 	if scrapeConcurrency < 1 {
 		scrapeConcurrency = 1
 	}
 	if client == nil {
 		client = NewClient(ClientOptions{})
 	}
-	return &JobstreetAdapter{
+	return &jobstreetAdapter{
 		Client:            client,
 		ScrapeConcurrency: scrapeConcurrency,
 	}
 }
 
-func (a *JobstreetAdapter) Name() string { return "jobstreet" }
+func (a *jobstreetAdapter) Name() string { return "jobstreet" }
 
-func (a *JobstreetAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
+func (a *jobstreetAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
 	doc, finalURL, err := a.Client.FetchDocument(ctx, pageURL)
 	if err != nil {
 		return nil, fmt.Errorf("jobstreet: %w", err)
@@ -82,7 +82,7 @@ func (a *JobstreetAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd,
 
 // scrapeListingPages walks listing pagination via rel=next until the job cap,
 // no usable next link, or an empty page. Deduplicates by canonical SourceURL.
-func (a *JobstreetAdapter) scrapeListingPages(ctx context.Context, doc *goquery.Document, pageURL string) ([]JobAd, error) {
+func (a *jobstreetAdapter) scrapeListingPages(ctx context.Context, doc *goquery.Document, pageURL string) ([]JobAd, error) {
 	seen := map[string]struct{}{}
 	var out []JobAd
 
@@ -175,7 +175,7 @@ func jobstreetNextPageURL(doc *goquery.Document, currentURL string) (string, boo
 
 // enrichListingDetails fetches each listing card's detail page concurrently
 // and replaces stubs with full ads. On failure, keeps the listing-card fields.
-func (a *JobstreetAdapter) enrichListingDetails(ctx context.Context, ads []JobAd) []JobAd {
+func (a *jobstreetAdapter) enrichListingDetails(ctx context.Context, ads []JobAd) []JobAd {
 	if len(ads) == 0 {
 		return ads
 	}

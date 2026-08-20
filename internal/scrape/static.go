@@ -22,25 +22,24 @@ var salaryTextRE = regexp.MustCompile(`(?i)(?:` +
 	`(?:\s*(?:/\s*(?:mo(?:nth)?|yr|year|hour|hr)|per\s+(?:month|year|hour)))?` +
 	`)`)
 
-// StaticAdapter uses net/http + goquery for server-rendered pages.
-type StaticAdapter struct {
+// staticAdapter uses net/http + goquery for server-rendered pages.
+type staticAdapter struct {
 	Client *Client
 }
 
-// NewStaticAdapter returns a static HTML adapter using client (or NewClient defaults if nil).
-func NewStaticAdapter(client *Client) *StaticAdapter {
+func newStaticAdapter(client *Client) *staticAdapter {
 	if client == nil {
 		client = NewClient(ClientOptions{})
 	}
-	return &StaticAdapter{Client: client}
+	return &staticAdapter{Client: client}
 }
 
-func (a *StaticAdapter) Name() string { return "static" }
+func (a *staticAdapter) Name() string { return "static" }
 
 // Scrape fetches pageURL. If the page looks like a listing (many similar links),
 // it returns one JobAd per discovered absolute job-like link (title from link text).
 // Otherwise it treats the URL as a single job detail page.
-func (a *StaticAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
+func (a *staticAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
 	doc, finalURL, err := a.Client.FetchDocument(ctx, pageURL)
 	if err != nil {
 		return nil, err

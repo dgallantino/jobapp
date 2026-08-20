@@ -50,25 +50,25 @@ func NewRegistry(opts RegistryOptions) *Registry {
 		Limiter:    opts.Limiter,
 		ChromePath: opts.ChromePath,
 	})
-	var extractor FieldExtractor
+	var extractor fieldExtractor
 	if opts.LLM != nil {
 		extractor = opts.LLM
 	}
 
 	r := &Registry{byName: map[string]Adapter{}}
 	for _, a := range []Adapter{
-		NewStaticAdapter(client),
-		NewJobstreetAdapter(client, opts.ScrapeConcurrency),
-		NewGlintsAdapter(client, opts.ScrapeConcurrency),
-		NewDeallsAdapter(client, opts.ScrapeConcurrency),
-		NewThreadsAdapter(client, extractor),
+		newStaticAdapter(client),
+		newJobstreetAdapter(client, opts.ScrapeConcurrency),
+		newGlintsAdapter(client, opts.ScrapeConcurrency),
+		newDeallsAdapter(client, opts.ScrapeConcurrency),
+		newThreadsAdapter(client, extractor),
 	} {
 		r.byName[a.Name()] = a
 	}
 	return r
 }
 
-var _ FieldExtractor = (*llm.Client)(nil)
+var _ fieldExtractor = (*llm.Client)(nil)
 
 // Get returns an adapter by name.
 func (r *Registry) Get(name string) (Adapter, error) {
