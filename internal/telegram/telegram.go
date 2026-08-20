@@ -126,7 +126,7 @@ func RunCheck(ctx context.Context, db *sql.DB, runner *scrape.Runner, c *Client)
 		anyFail := false
 		for _, link := range urls {
 			sid := sourceID
-			_, inserted, err := scrape.ScrapeAndStore(ctx, db, runner, link, &sid)
+			_, inserted, err := runner.ScrapeAndStore(ctx, db, link, &sid)
 			if err != nil {
 				log.Printf("telegram scrape %s: %v", link, err)
 				res.Errors++

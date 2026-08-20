@@ -127,7 +127,7 @@ func runCrawl(cfg config.Config, args []string) int {
 		Limiter:           limiter,
 		LLM:               llm.NewClient(cfg.OpenRouterAPIKey, cfg.OpenRouterModel, cfg.OpenRouterSystemPrompt),
 	})
-	if _, err := scrape.RunCrawl(context.Background(), sqlDB, runner); err != nil {
+	if _, err := runner.RunCrawl(context.Background(), sqlDB); err != nil {
 		log.Fatal(err)
 	}
 	return 0
