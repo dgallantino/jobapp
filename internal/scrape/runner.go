@@ -20,29 +20,29 @@ type JobAd struct {
 	PostedAt    *time.Time
 }
 
-// Adapter scrapes a listing (or detail) URL into job ads.
-type Adapter interface {
+// adapter scrapes a listing (or detail) URL into job ads.
+type adapter interface {
 	// Name must match the adapter column value in sources.
 	Name() string
 	// Scrape fetches the page at pageURL and returns discovered job ads.
 	Scrape(ctx context.Context, pageURL string) ([]JobAd, error)
 }
 
-// Registry maps adapter name -> implementation.
-type Registry struct {
-	byName map[string]Adapter
+// Runner owns built-in adapters and runs crawl/ingest.
+type Runner struct {
+	byName map[string]adapter
 }
 
-// RegistryOptions configures built-in adapters.
-type RegistryOptions struct {
+// Options configures built-in adapters.
+type Options struct {
 	ScrapeConcurrency int         // max concurrent detail fetches per listing scrape
 	ChromePath        string      // Chromium/Chrome binary for chromedp (Glints listing only)
 	Limiter           Limiter     // optional per-host rate limiter for crawl outbound work
 	LLM               *llm.Client // optional; used by the Threads adapter to fill empty fields
 }
 
-// NewRegistry returns a registry with built-in adapters.
-func NewRegistry(opts RegistryOptions) *Registry {
+// New returns a runner with built-in adapters.
+func New(opts Options) *Runner {
 	if opts.ScrapeConcurrency < 1 {
 		opts.ScrapeConcurrency = 1
 	}
@@ -55,8 +55,8 @@ func NewRegistry(opts RegistryOptions) *Registry {
 		extractor = opts.LLM
 	}
 
-	r := &Registry{byName: map[string]Adapter{}}
-	for _, a := range []Adapter{
+	r := &Runner{byName: map[string]adapter{}}
+	for _, a := range []adapter{
 		newStaticAdapter(client),
 		newJobstreetAdapter(client, opts.ScrapeConcurrency),
 		newGlintsAdapter(client, opts.ScrapeConcurrency),
@@ -70,8 +70,7 @@ func NewRegistry(opts RegistryOptions) *Registry {
 
 var _ fieldExtractor = (*llm.Client)(nil)
 
-// Get returns an adapter by name.
-func (r *Registry) Get(name string) (Adapter, error) {
+func (r *Runner) get(name string) (adapter, error) {
 	a, ok := r.byName[name]
 	if !ok {
 		return nil, fmt.Errorf("unknown adapter %q", name)
@@ -79,9 +78,9 @@ func (r *Registry) Get(name string) (Adapter, error) {
 	return a, nil
 }
 
-// Resolve picks an adapter for a bare job URL (e.g. Telegram links).
+// resolve picks an adapter for a bare job URL (e.g. Telegram links).
 // Matches known hostnames; falls back to static.
-func (r *Registry) Resolve(rawURL string) Adapter {
+func (r *Runner) resolve(rawURL string) adapter {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return r.byName["static"]

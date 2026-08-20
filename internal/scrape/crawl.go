@@ -18,7 +18,7 @@ type CrawlResult struct {
 }
 
 // RunCrawl loads enabled sources, scrapes each, upserts job_ads.
-func RunCrawl(ctx context.Context, db *sql.DB, reg *Registry) (CrawlResult, error) {
+func RunCrawl(ctx context.Context, db *sql.DB, r *Runner) (CrawlResult, error) {
 	sources, err := models.ListSources(ctx, db, true)
 	if err != nil {
 		return CrawlResult{}, err
@@ -32,7 +32,7 @@ func RunCrawl(ctx context.Context, db *sql.DB, reg *Registry) (CrawlResult, erro
 			// Telegram/Threads sources are markers for link-only ingest, not crawl targets.
 			continue
 		}
-		adapter, err := reg.Get(src.Adapter)
+		adapter, err := r.get(src.Adapter)
 		if err != nil {
 			log.Printf("source %q (%d): %v", src.Name, src.ID, err)
 			res.Errors++
@@ -76,9 +76,9 @@ func RunCrawl(ctx context.Context, db *sql.DB, reg *Registry) (CrawlResult, erro
 	return res, nil
 }
 
-// ScrapeAndStore scrapes a single URL via Resolve and inserts into job_ads.
-func ScrapeAndStore(ctx context.Context, db *sql.DB, reg *Registry, rawURL string, sourceID *int64) (models.JobAd, bool, error) {
-	adapter := reg.Resolve(rawURL)
+// ScrapeAndStore scrapes a single URL via resolve and inserts into job_ads.
+func ScrapeAndStore(ctx context.Context, db *sql.DB, r *Runner, rawURL string, sourceID *int64) (models.JobAd, bool, error) {
+	adapter := r.resolve(rawURL)
 	ads, err := adapter.Scrape(ctx, rawURL)
 	if err != nil {
 		return models.JobAd{}, false, err
@@ -96,7 +96,7 @@ func ScrapeAndStore(ctx context.Context, db *sql.DB, reg *Registry, rawURL strin
 	}
 	// If listing returned many and none match, scrape as detail via static.
 	if picked.SourceURL != rawURL && picked.Description == "" {
-		static, err := reg.Get("static")
+		static, err := r.get("static")
 		if err != nil {
 			return models.JobAd{}, false, err
 		}

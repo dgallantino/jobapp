@@ -75,7 +75,7 @@ type CheckResult struct {
 }
 
 // RunCheck short-polls getUpdates, scrapes job links, replies, advances state.
-func RunCheck(ctx context.Context, db *sql.DB, reg *scrape.Registry, c *Client) (CheckResult, error) {
+func RunCheck(ctx context.Context, db *sql.DB, runner *scrape.Runner, c *Client) (CheckResult, error) {
 	if c.Token == "" {
 		return CheckResult{}, fmt.Errorf("TELEGRAM_BOT_TOKEN is not set")
 	}
@@ -126,7 +126,7 @@ func RunCheck(ctx context.Context, db *sql.DB, reg *scrape.Registry, c *Client) 
 		anyFail := false
 		for _, link := range urls {
 			sid := sourceID
-			_, inserted, err := scrape.ScrapeAndStore(ctx, db, reg, link, &sid)
+			_, inserted, err := scrape.ScrapeAndStore(ctx, db, runner, link, &sid)
 			if err != nil {
 				log.Printf("telegram scrape %s: %v", link, err)
 				res.Errors++

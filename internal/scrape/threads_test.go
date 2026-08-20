@@ -227,8 +227,8 @@ func TestThreadsAdapter_LLMErrorKeepsRegex(t *testing.T) {
 	}
 }
 
-func TestRegistryResolveThreads(t *testing.T) {
-	r := NewRegistry(RegistryOptions{})
+func TestRunnerResolveThreads(t *testing.T) {
+	r := New(Options{})
 	tests := []struct {
 		raw  string
 		want string
@@ -240,7 +240,7 @@ func TestRegistryResolveThreads(t *testing.T) {
 		{"https://example.com/jobs/1", "static"},
 	}
 	for _, tc := range tests {
-		got := r.Resolve(tc.raw).Name()
+		got := r.resolve(tc.raw).Name()
 		if got != tc.want {
 			t.Errorf("Resolve(%q) = %q, want %q", tc.raw, got, tc.want)
 		}
