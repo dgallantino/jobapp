@@ -97,6 +97,7 @@ func (s *Server) parseTemplates() error {
 		{"source_edit", []string{"templates/layout.html", "templates/source_edit.html"}},
 		{"status_cell", []string{"templates/status_cell.html"}},
 		{"letter_partial", []string{"templates/letter_partial.html"}},
+		{"prompt_partial", []string{"templates/prompt_partial.html"}},
 	}
 	for _, p := range pages {
 		t, err := template.New("").ParseFS(assets, p.files...)
@@ -116,7 +117,7 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	root := "layout"
-	if name == "status_cell" || name == "letter_partial" {
+	if name == "status_cell" || name == "letter_partial" || name == "prompt_partial" {
 		root = name
 	}
 	if err := t.ExecuteTemplate(w, root, data); err != nil {
@@ -141,6 +142,7 @@ func (s *Server) routes() http.Handler {
 	authed.HandleFunc("POST /jobs/{id}/cover-letter", s.handleCoverLetter)
 	authed.HandleFunc("GET /profile", s.handleProfileGet)
 	authed.HandleFunc("POST /profile", s.handleProfilePost)
+	authed.HandleFunc("POST /profile/prompt", s.handleProfilePrompt)
 	authed.HandleFunc("GET /sources", s.handleSourcesGet)
 	authed.HandleFunc("POST /sources", s.handleSourcesCreate)
 	authed.HandleFunc("GET /sources/{id}/edit", s.handleSourceEditGet)
@@ -483,6 +485,21 @@ func (s *Server) handleProfileGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, "profile", viewData{"Authed": true, "Entries": entries})
+}
+
+func (s *Server) handleProfilePrompt(w http.ResponseWriter, r *http.Request) {
+	profile, err := models.ProfileMap(r.Context(), s.DB)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var content string
+	if s.LLM != nil {
+		content = s.LLM.ComposeCoverLetterPrompt(profile)
+	} else {
+		content = llm.ComposeCoverLetterPrompt("", profile)
+	}
+	s.render(w, "prompt_partial", viewData{"Content": content})
 }
 
 func (s *Server) handleProfilePost(w http.ResponseWriter, r *http.Request) {

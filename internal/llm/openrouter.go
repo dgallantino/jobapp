@@ -179,9 +179,31 @@ func (c *Client) coverLetterSystem() string {
 	return defaultCoverLetterSystem
 }
 
-// buildCoverLetterPrompt constructs system/user messages for cover letter generation.
-func buildCoverLetterPrompt(system string, profile map[string]string, title, company, description string) (string, string) {
+// ComposeCoverLetterPrompt builds a single paste-ready prompt for external LLM UIs
+// (ChatGPT, Claude, etc.) from system instructions and profile data only.
+// Job fields are left as empty placeholders. Does not call any API.
+func ComposeCoverLetterPrompt(system string, profile map[string]string) string {
+	if strings.TrimSpace(system) == "" {
+		system = defaultCoverLetterSystem
+	}
 	var b strings.Builder
+	b.WriteString(system)
+	b.WriteString("\n\n")
+	appendProfileSection(&b, profile)
+	b.WriteString("\nJob:\n")
+	b.WriteString("Title: \n")
+	b.WriteString("Company: \n")
+	b.WriteString("Description:\n")
+	b.WriteString("\n\nWrite a tailored cover letter.")
+	return b.String()
+}
+
+// ComposeCoverLetterPrompt builds a paste-ready prompt using this client's system prompt.
+func (c *Client) ComposeCoverLetterPrompt(profile map[string]string) string {
+	return ComposeCoverLetterPrompt(c.coverLetterSystem(), profile)
+}
+
+func appendProfileSection(b *strings.Builder, profile map[string]string) {
 	b.WriteString("Candidate profile:\n")
 	for _, key := range []string{"full_name", "summary", "work_history", "skills", "tone_preferences"} {
 		if v := strings.TrimSpace(profile[key]); v != "" {
@@ -207,7 +229,12 @@ func buildCoverLetterPrompt(system string, profile map[string]string, title, com
 		b.WriteString(v)
 		b.WriteString("\n")
 	}
+}
 
+// buildCoverLetterPrompt constructs system/user messages for cover letter generation.
+func buildCoverLetterPrompt(system string, profile map[string]string, title, company, description string) (string, string) {
+	var b strings.Builder
+	appendProfileSection(&b, profile)
 	b.WriteString("\nJob:\n")
 	b.WriteString("Title: ")
 	b.WriteString(title)
