@@ -72,6 +72,7 @@ func New(opts Options) *Runner {
 		newJobstreetAdapter(client, opts.ScrapeConcurrency),
 		newGlintsAdapter(client, opts.ScrapeConcurrency),
 		newDeallsAdapter(client, opts.ScrapeConcurrency),
+		newKalibrrAdapter(client, opts.ScrapeConcurrency),
 		newThreadsAdapter(client, extractor),
 	} {
 		r.byName[a.Name()] = a
@@ -108,6 +109,10 @@ func (r *Runner) resolve(rawURL string) adapter {
 		}
 	case strings.Contains(host, "dealls"):
 		if a, ok := r.byName["dealls"]; ok {
+			return a
+		}
+	case strings.Contains(host, "kalibrr"):
+		if a, ok := r.byName["kalibrr"]; ok {
 			return a
 		}
 	case isThreadsHost(host):

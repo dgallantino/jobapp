@@ -1,0 +1,60 @@
+{
+  "correction_text_search": "",
+  "count": 3,
+  "from_alternative": false,
+  "from_correction": false,
+  "jobs": [
+    {
+      "id": 270223,
+      "name": "Accounting and Tax Manager",
+      "slug": "accounting-and-tax-manager",
+      "company_name": "PT Agung Putra Niaga Mandiri",
+      "description": "<ol><li>Mengembangkan strategi accounting.</li></ol>",
+      "qualifications": "<ol><li>Pendidikan minimal S1 Akuntansi.</li></ol>",
+      "base_salary": 14000000,
+      "maximum_salary": 17000000,
+      "salary_currency": "IDR",
+      "salary_interval": "month",
+      "salary_shown": true,
+      "company": {
+        "code": "pt-agung-putra-niaga-mandiri",
+        "name": "PT Agung Putra Niaga Mandiri"
+      }
+    },
+    {
+      "id": 266442,
+      "name": "Software Developer",
+      "slug": "software-developer-2",
+      "company_name": "NTT INDONESIA TECHNOLOGY",
+      "description": "<ul><li>Develop quality software</li></ul>",
+      "qualifications": "<ul><li>2 year experience as Developer</li></ul>",
+      "base_salary": null,
+      "maximum_salary": 30000000,
+      "salary_currency": "IDR",
+      "salary_interval": "month",
+      "salary_shown": false,
+      "company": {
+        "code": "ntt-indonesia",
+        "name": "NTT INDONESIA TECHNOLOGY"
+      }
+    },
+    {
+      "id": 271250,
+      "name": "Developer",
+      "slug": "developer",
+      "company_name": "Quantyc.ai",
+      "description": "<ul><li>Build features</li></ul>",
+      "qualifications": "<ul><li>Junior level</li></ul>",
+      "base_salary": null,
+      "maximum_salary": null,
+      "salary_currency": null,
+      "salary_interval": null,
+      "salary_shown": true,
+      "company": {
+        "code": "quantyc-ai",
+        "name": "Quantyc.ai"
+      }
+    }
+  ],
+  "search_text": "developer"
+}

@@ -237,6 +237,7 @@ func TestRunnerResolveThreads(t *testing.T) {
 		{"https://threads.net/@x/post/abc", "threads"},
 		{"https://www.threads.net/@x/post/abc?xmt=1", "threads"},
 		{"https://id.jobstreet.com/job/1", "jobstreet"},
+		{"https://www.kalibrr.id/id-ID/c/ntt-indonesia/jobs/266442/software-developer-2", "kalibrr"},
 		{"https://example.com/jobs/1", "static"},
 	}
 	for _, tc := range tests {

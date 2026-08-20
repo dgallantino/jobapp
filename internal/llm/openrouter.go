@@ -190,7 +190,7 @@ func ComposeCoverLetterPrompt(system string, profile map[string]string) string {
 	b.WriteString(system)
 	b.WriteString("\n\n")
 	appendProfileSection(&b, profile)
-	b.WriteString("\nJob AD:\n")
+	b.WriteString("\nJob Ad:\n")
 	b.WriteString("\n\nWrite a tailored cover letter.")
 	return b.String()
 }

@@ -634,6 +634,7 @@ var allowedCrawlAdapters = map[string]struct{}{
 	"jobstreet": {},
 	"glints":    {},
 	"dealls":    {},
+	"kalibrr":   {},
 }
 
 // validSourceAdapter reports whether adapter may be stored via the sources UI.
