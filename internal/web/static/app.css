@@ -213,6 +213,71 @@ button.danger { background: var(--danger); color: var(--on-accent); }
   cursor: pointer;
 }
 
+.col-expand {
+  width: 1.7rem;
+  text-align: center;
+  vertical-align: middle;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+
+.job-expand {
+  margin: 0;
+}
+
+.job-expand > summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  list-style: none;
+  cursor: pointer;
+  color: var(--muted);
+  border-radius: var(--radius);
+}
+
+.job-expand > summary::-webkit-details-marker,
+.job-expand > summary::marker {
+  display: none;
+  content: "";
+}
+
+.job-expand > summary::before {
+  content: "▸";
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.job-expand[open] > summary::before {
+  content: "▾";
+}
+
+.job-expand > summary:hover {
+  color: var(--accent);
+  background: var(--bg-accent);
+}
+
+.job-entry:not(:has(.job-expand[open])) .job-desc-row {
+  display: none;
+}
+
+.job-desc-row td {
+  padding-top: 0.35rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

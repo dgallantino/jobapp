@@ -12,7 +12,7 @@ import (
 // limit and offset apply pagination (limit <= 0 returns no rows).
 func ListJobAds(ctx context.Context, db *sql.DB, status string, limit, offset int) ([]JobAd, error) {
 	q := `
-		SELECT j.id, j.source_id, j.source_url, j.title, j.company, j.salary, j.description,
+		SELECT j.id, j.source_id, j.source_url, j.title, j.company, j.salary, '' AS description,
 		       j.posted_at, j.scraped_at, j.status, COALESCE(s.name, '')
 		FROM job_ads j
 		LEFT JOIN sources s ON s.id = j.source_id`
