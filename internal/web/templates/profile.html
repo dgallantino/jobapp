@@ -10,4 +10,15 @@
   {{end}}
   <button type="submit">Save profile</button>
 </form>
+<h2>Cover letter prompt</h2>
+<button
+  type="button"
+  class="secondary"
+  hx-post="/profile/prompt"
+  hx-target="#prompt-result"
+  hx-swap="innerHTML"
+  hx-disabled-elt="this">
+  Generate prompt
+</button>
+<div id="prompt-result"></div>
 {{end}}

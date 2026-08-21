@@ -30,7 +30,7 @@ var deallsReservedJobSlugs = map[string]struct{}{
 	"applied": {},
 }
 
-// DeallsAdapter scrapes Dealls listing and detail pages.
+// deallsAdapter scrapes Dealls listing and detail pages.
 //
 // Investigation notes (2026-08):
 // Dealls (dealls.com) is Next.js with React Query. First-page listing cards and
@@ -41,28 +41,28 @@ var deallsReservedJobSlugs = map[string]struct{}{
 //
 // Detail path: /loker/{job-slug}~{company-slug}.
 // Description: Deskripsi Pekerjaan (responsibilities) + Kualifikasi (requirements).
-type DeallsAdapter struct {
+type deallsAdapter struct {
 	Client            *Client
 	ScrapeConcurrency int
 	APIBase           string // optional; default https://api.sejutacita.id (tests override)
 }
 
-// NewDeallsAdapter returns a Dealls adapter using client (or NewClient defaults if nil).
+// newDeallsAdapter returns a Dealls adapter using client (or NewClient defaults if nil).
 // scrapeConcurrency caps concurrent detail-page fetches (minimum 1).
-func NewDeallsAdapter(client *Client, scrapeConcurrency int) *DeallsAdapter {
+func newDeallsAdapter(client *Client, scrapeConcurrency int) *deallsAdapter {
 	if scrapeConcurrency < 1 {
 		scrapeConcurrency = 1
 	}
 	if client == nil {
 		client = NewClient(ClientOptions{})
 	}
-	return &DeallsAdapter{
+	return &deallsAdapter{
 		Client:            client,
 		ScrapeConcurrency: scrapeConcurrency,
 	}
 }
 
-func (a *DeallsAdapter) apiBase() string {
+func (a *deallsAdapter) apiBase() string {
 	base := strings.TrimSpace(a.APIBase)
 	if base == "" {
 		return deallsDefaultAPIBase
@@ -70,9 +70,9 @@ func (a *DeallsAdapter) apiBase() string {
 	return strings.TrimRight(base, "/")
 }
 
-func (a *DeallsAdapter) Name() string { return "dealls" }
+func (a *deallsAdapter) Name() string { return "dealls" }
 
-func (a *DeallsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
+func (a *deallsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
 	doc, finalURL, err := a.Client.FetchDocument(ctx, pageURL)
 	if err != nil {
 		return nil, fmt.Errorf("dealls: %w", err)
@@ -95,7 +95,7 @@ func (a *DeallsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, er
 
 // scrapeListingPages takes SSR page-1 stubs, then walks api.sejutacita.id explore
 // pages until the job cap, empty page, or last totalPages. Deduplicates by SourceURL.
-func (a *DeallsAdapter) scrapeListingPages(ctx context.Context, doc *goquery.Document, pageURL string) ([]JobAd, error) {
+func (a *deallsAdapter) scrapeListingPages(ctx context.Context, doc *goquery.Document, pageURL string) ([]JobAd, error) {
 	seen := map[string]struct{}{}
 	var out []JobAd
 
@@ -258,7 +258,7 @@ func deallsAdsFromJobs(jobs []deallsJobJSON, siteOrigin string) []JobAd {
 
 // enrichListingDetails fetches each listing stub's detail page concurrently
 // and replaces stubs with full ads. On failure, keeps the listing-card fields.
-func (a *DeallsAdapter) enrichListingDetails(ctx context.Context, ads []JobAd) []JobAd {
+func (a *deallsAdapter) enrichListingDetails(ctx context.Context, ads []JobAd) []JobAd {
 	if len(ads) == 0 {
 		return ads
 	}

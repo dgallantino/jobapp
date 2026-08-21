@@ -316,3 +316,88 @@ func TestHandleSourceToggleFlipsEnabled(t *testing.T) {
 		t.Fatal("expected source to be disabled after toggle")
 	}
 }
+
+func TestHandleSourcesCreateRejectsThreads(t *testing.T) {
+	srv, database := testServer(t)
+
+	form := url.Values{
+		"name":    {"Threads board"},
+		"url":     {"https://www.threads.com/@x/post/y"},
+		"adapter": {"threads"},
+		"enabled": {"1"},
+	}
+	req := authedRequest(t, srv, "POST", "/sources", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	srv.routes().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status %d, want %d; body %s", w.Code, http.StatusBadRequest, w.Body.String())
+	}
+
+	sources, err := models.ListSources(t.Context(), database, false)
+	if err != nil {
+		t.Fatalf("list sources: %v", err)
+	}
+	if len(sources) != 0 {
+		t.Fatalf("got %d sources, want none", len(sources))
+	}
+}
+
+func TestHandleSourcesCreateAllowsStatic(t *testing.T) {
+	srv, database := testServer(t)
+
+	form := url.Values{
+		"name":    {"Example"},
+		"url":     {"https://example.com/jobs"},
+		"adapter": {"static"},
+		"enabled": {"1"},
+	}
+	req := authedRequest(t, srv, "POST", "/sources", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	srv.routes().ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("status %d, want %d; body %s", w.Code, http.StatusSeeOther, w.Body.String())
+	}
+
+	sources, err := models.ListSources(t.Context(), database, false)
+	if err != nil {
+		t.Fatalf("list sources: %v", err)
+	}
+	if len(sources) != 1 || sources[0].Adapter != "static" {
+		t.Fatalf("sources = %+v, want one static", sources)
+	}
+}
+
+func TestHandleSourceUpdateRejectsThreads(t *testing.T) {
+	srv, database := testServer(t)
+	id, err := models.CreateSource(t.Context(), database, "Example", "https://example.com/jobs", "static", true)
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+
+	form := url.Values{
+		"name":    {"Example"},
+		"url":     {"https://example.com/jobs"},
+		"adapter": {"threads"},
+		"enabled": {"1"},
+	}
+	req := authedRequest(t, srv, "POST", "/sources/"+strconv.FormatInt(id, 10), strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	srv.routes().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status %d, want %d; body %s", w.Code, http.StatusBadRequest, w.Body.String())
+	}
+
+	src, err := models.GetSource(t.Context(), database, id)
+	if err != nil {
+		t.Fatalf("get source: %v", err)
+	}
+	if src.Adapter != "static" {
+		t.Fatalf("adapter = %q, want static", src.Adapter)
+	}
+}

@@ -7,14 +7,19 @@
   <input id="name" name="name" type="text" value="{{.Source.Name}}" required>
   <label for="url">Listing URL</label>
   <input id="url" name="url" type="url" value="{{.Source.URL}}" required>
+  {{if eq .Source.Adapter "telegram"}}
+  <p>Adapter: <code>telegram</code></p>
+  <input type="hidden" name="adapter" value="telegram">
+  {{else}}
   <label for="adapter">Adapter</label>
   <select id="adapter" name="adapter">
     <option value="static" {{if eq .Source.Adapter "static"}}selected{{end}}>static</option>
     <option value="jobstreet" {{if eq .Source.Adapter "jobstreet"}}selected{{end}}>jobstreet</option>
     <option value="glints" {{if eq .Source.Adapter "glints"}}selected{{end}}>glints</option>
     <option value="dealls" {{if eq .Source.Adapter "dealls"}}selected{{end}}>dealls</option>
-    <option value="telegram" {{if eq .Source.Adapter "telegram"}}selected{{end}}>telegram</option>
+    <option value="kalibrr" {{if eq .Source.Adapter "kalibrr"}}selected{{end}}>kalibrr</option>
   </select>
+  {{end}}
   <div class="checkbox-row">
     <input id="enabled" name="enabled" type="checkbox" value="1" {{if .Source.Enabled}}checked{{end}}>
     <label for="enabled">Enabled</label>

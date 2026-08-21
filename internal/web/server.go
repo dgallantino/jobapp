@@ -97,6 +97,7 @@ func (s *Server) parseTemplates() error {
 		{"source_edit", []string{"templates/layout.html", "templates/source_edit.html"}},
 		{"status_cell", []string{"templates/status_cell.html"}},
 		{"letter_partial", []string{"templates/letter_partial.html"}},
+		{"prompt_partial", []string{"templates/prompt_partial.html"}},
 	}
 	for _, p := range pages {
 		t, err := template.New("").ParseFS(assets, p.files...)
@@ -116,7 +117,7 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	root := "layout"
-	if name == "status_cell" || name == "letter_partial" {
+	if name == "status_cell" || name == "letter_partial" || name == "prompt_partial" {
 		root = name
 	}
 	if err := t.ExecuteTemplate(w, root, data); err != nil {
@@ -141,6 +142,7 @@ func (s *Server) routes() http.Handler {
 	authed.HandleFunc("POST /jobs/{id}/cover-letter", s.handleCoverLetter)
 	authed.HandleFunc("GET /profile", s.handleProfileGet)
 	authed.HandleFunc("POST /profile", s.handleProfilePost)
+	authed.HandleFunc("POST /profile/prompt", s.handleProfilePrompt)
 	authed.HandleFunc("GET /sources", s.handleSourcesGet)
 	authed.HandleFunc("POST /sources", s.handleSourcesCreate)
 	authed.HandleFunc("GET /sources/{id}/edit", s.handleSourceEditGet)
@@ -485,6 +487,21 @@ func (s *Server) handleProfileGet(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "profile", viewData{"Authed": true, "Entries": entries})
 }
 
+func (s *Server) handleProfilePrompt(w http.ResponseWriter, r *http.Request) {
+	profile, err := models.ProfileMap(r.Context(), s.DB)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var content string
+	if s.LLM != nil {
+		content = s.LLM.ComposeCoverLetterPrompt(profile)
+	} else {
+		content = llm.ComposeCoverLetterPrompt("", profile)
+	}
+	s.render(w, "prompt_partial", viewData{"Content": content})
+}
+
 func (s *Server) handleProfilePost(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
@@ -520,11 +537,16 @@ func (s *Server) handleSourcesCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
+	adapter := strings.TrimSpace(r.FormValue("adapter"))
+	if !validSourceAdapter(adapter, "") {
+		http.Error(w, "adapter is not allowed for crawl sources", http.StatusBadRequest)
+		return
+	}
 	enabled := r.FormValue("enabled") == "1"
 	_, err := models.CreateSource(r.Context(), s.DB,
 		strings.TrimSpace(r.FormValue("name")),
 		strings.TrimSpace(r.FormValue("url")),
-		strings.TrimSpace(r.FormValue("adapter")),
+		adapter,
 		enabled,
 	)
 	if err != nil {
@@ -558,11 +580,21 @@ func (s *Server) handleSourceUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
+	existing, err := models.GetSource(r.Context(), s.DB, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	adapter := strings.TrimSpace(r.FormValue("adapter"))
+	if !validSourceAdapter(adapter, existing.Adapter) {
+		http.Error(w, "adapter is not allowed for crawl sources", http.StatusBadRequest)
+		return
+	}
 	enabled := r.FormValue("enabled") == "1"
 	if err := models.UpdateSource(r.Context(), s.DB, id,
 		strings.TrimSpace(r.FormValue("name")),
 		strings.TrimSpace(r.FormValue("url")),
-		strings.TrimSpace(r.FormValue("adapter")),
+		adapter,
 		enabled,
 	); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -595,4 +627,21 @@ func (s *Server) handleSourceDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/sources", http.StatusSeeOther)
+}
+
+var allowedCrawlAdapters = map[string]struct{}{
+	"static":    {},
+	"jobstreet": {},
+	"glints":    {},
+	"dealls":    {},
+	"kalibrr":   {},
+}
+
+// validSourceAdapter reports whether adapter may be stored via the sources UI.
+// telegram is allowed only when editing an existing telegram marker source.
+func validSourceAdapter(adapter, previous string) bool {
+	if _, ok := allowedCrawlAdapters[adapter]; ok {
+		return true
+	}
+	return adapter == "telegram" && previous == "telegram"
 }

@@ -1,0 +1,26 @@
+{
+  "correction_text_search": "",
+  "count": 30,
+  "from_alternative": false,
+  "from_correction": false,
+  "jobs": [
+    {
+      "id": 280001,
+      "name": "Backend Engineer",
+      "slug": "backend-engineer",
+      "company_name": "Example Co",
+      "description": "<ul><li>Write Go services</li></ul>",
+      "qualifications": "<ul><li>3 years experience</li></ul>",
+      "base_salary": null,
+      "maximum_salary": null,
+      "salary_currency": null,
+      "salary_interval": null,
+      "salary_shown": false,
+      "company": {
+        "code": "example-co",
+        "name": "Example Co"
+      }
+    }
+  ],
+  "search_text": "developer"
+}

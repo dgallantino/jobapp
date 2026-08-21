@@ -121,12 +121,13 @@ func runCrawl(cfg config.Config, args []string) int {
 		}
 	}
 
-	reg := scrape.NewRegistry(scrape.RegistryOptions{
+	runner := scrape.New(scrape.Options{
 		ScrapeConcurrency: cfg.ScrapeConcurrency,
 		ChromePath:        cfg.ChromePath,
 		Limiter:           limiter,
+		LLM:               llm.NewClient(cfg.OpenRouterAPIKey, cfg.OpenRouterModel, cfg.OpenRouterSystemPrompt),
 	})
-	if _, err := scrape.RunCrawl(context.Background(), sqlDB, reg); err != nil {
+	if _, err := runner.RunCrawl(context.Background(), sqlDB); err != nil {
 		log.Fatal(err)
 	}
 	return 0
@@ -143,12 +144,13 @@ func runTelegram(cfg config.Config, args []string) int {
 	}
 	defer sqlDB.Close()
 
-	reg := scrape.NewRegistry(scrape.RegistryOptions{
+	runner := scrape.New(scrape.Options{
 		ScrapeConcurrency: cfg.ScrapeConcurrency,
 		ChromePath:        cfg.ChromePath,
+		LLM:               llm.NewClient(cfg.OpenRouterAPIKey, cfg.OpenRouterModel, cfg.OpenRouterSystemPrompt),
 	})
 	client := telegram.NewClient(cfg.TelegramBotToken, cfg.TelegramChatID)
-	if _, err := telegram.RunCheck(context.Background(), sqlDB, reg, client); err != nil {
+	if _, err := telegram.RunCheck(context.Background(), sqlDB, runner, client); err != nil {
 		log.Fatal(err)
 	}
 	return 0

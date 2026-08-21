@@ -18,6 +18,11 @@ const defaultCoverLetterSystem = "You write tailored cover letters for job appli
 	"Use only the candidate profile and job description given; never invent employers, degrees, skills, or experience. " +
 	"Output the letter body only, no markdown fences."
 
+const extractJobFieldsSystem = "You extract job posting fields from unstructured social media text. " +
+	"Use only the post; never invent employers, job titles, or salaries. " +
+	"If a field is not clearly present, return an empty string. " +
+	"Output a JSON object only, no markdown fences."
+
 // Client calls OpenRouter's OpenAI-compatible chat completions API.
 type Client struct {
 	APIKey       string
@@ -57,10 +62,35 @@ type chatResponse struct {
 
 // GenerateCoverLetter builds a prompt from profile + job ad and calls OpenRouter.
 func (c *Client) GenerateCoverLetter(ctx context.Context, profile map[string]string, title, company, description string) (string, error) {
-	if c.APIKey == "" {
+	system, user := buildCoverLetterPrompt(c.coverLetterSystem(), profile, title, company, description)
+	content, err := c.complete(ctx, system, user)
+	if err != nil {
+		return "", err
+	}
+	if sig := strings.TrimSpace(profile["signature"]); sig != "" {
+		content = content + "\n\n" + sig
+	}
+	return content, nil
+}
+
+// ExtractJobFields asks the model to fill the named empty fields from postText.
+// missing should be a subset of title, company, salary. Unknown fields stay empty.
+func (c *Client) ExtractJobFields(ctx context.Context, postText string, missing []string) (title, company, salary string, err error) {
+	if len(missing) == 0 {
+		return "", "", "", nil
+	}
+	system, user := buildExtractPrompt(postText, missing)
+	content, err := c.complete(ctx, system, user)
+	if err != nil {
+		return "", "", "", err
+	}
+	return decodeJobFieldsJSON(content)
+}
+
+func (c *Client) complete(ctx context.Context, system, user string) (string, error) {
+	if c == nil || c.APIKey == "" {
 		return "", fmt.Errorf("OPENROUTER_API_KEY is not set")
 	}
-	system, user := buildPrompt(c.coverLetterSystem(), profile, title, company, description)
 
 	body, err := json.Marshal(chatRequest{
 		Model: c.Model,
@@ -105,11 +135,39 @@ func (c *Client) GenerateCoverLetter(ctx context.Context, profile map[string]str
 	if len(parsed.Choices) == 0 {
 		return "", fmt.Errorf("openrouter: empty choices")
 	}
-	content := strings.TrimSpace(parsed.Choices[0].Message.Content)
-	if sig := strings.TrimSpace(profile["signature"]); sig != "" {
-		content = content + "\n\n" + sig
+	return strings.TrimSpace(parsed.Choices[0].Message.Content), nil
+}
+
+func buildExtractPrompt(postText string, missing []string) (string, string) {
+	var b strings.Builder
+	b.WriteString("Extract only these fields from the post: ")
+	b.WriteString(strings.Join(missing, ", "))
+	b.WriteString(".\nReturn JSON with those keys. Use empty strings when unknown.\n\nPost:\n")
+	b.WriteString(postText)
+	return extractJobFieldsSystem, b.String()
+}
+
+func decodeJobFieldsJSON(content string) (title, company, salary string, err error) {
+	content = strings.TrimSpace(content)
+	content = strings.TrimPrefix(content, "```json")
+	content = strings.TrimPrefix(content, "```JSON")
+	content = strings.TrimPrefix(content, "```")
+	content = strings.TrimSuffix(content, "```")
+	content = strings.TrimSpace(content)
+	if i := strings.Index(content, "{"); i >= 0 {
+		if j := strings.LastIndex(content, "}"); j > i {
+			content = content[i : j+1]
+		}
 	}
-	return content, nil
+	var parsed struct {
+		Title   string `json:"title"`
+		Company string `json:"company"`
+		Salary  string `json:"salary"`
+	}
+	if err := json.Unmarshal([]byte(content), &parsed); err != nil {
+		return "", "", "", fmt.Errorf("decode job fields: %w", err)
+	}
+	return strings.TrimSpace(parsed.Title), strings.TrimSpace(parsed.Company), strings.TrimSpace(parsed.Salary), nil
 }
 
 func (c *Client) coverLetterSystem() string {
@@ -121,9 +179,28 @@ func (c *Client) coverLetterSystem() string {
 	return defaultCoverLetterSystem
 }
 
-// buildPrompt constructs system/user messages for cover letter generation.
-func buildPrompt(system string, profile map[string]string, title, company, description string) (string, string) {
+// ComposeCoverLetterPrompt builds a single paste-ready prompt for external LLM UIs
+// (ChatGPT, Claude, etc.) from system instructions and profile data only.
+// Job fields are left as empty placeholders. Does not call any API.
+func ComposeCoverLetterPrompt(system string, profile map[string]string) string {
+	if strings.TrimSpace(system) == "" {
+		system = defaultCoverLetterSystem
+	}
 	var b strings.Builder
+	b.WriteString(system)
+	b.WriteString("\n\n")
+	appendProfileSection(&b, profile)
+	b.WriteString("\nJob Ad:\n")
+	b.WriteString("\n\nWrite a tailored cover letter.")
+	return b.String()
+}
+
+// ComposeCoverLetterPrompt builds a paste-ready prompt using this client's system prompt.
+func (c *Client) ComposeCoverLetterPrompt(profile map[string]string) string {
+	return ComposeCoverLetterPrompt(c.coverLetterSystem(), profile)
+}
+
+func appendProfileSection(b *strings.Builder, profile map[string]string) {
 	b.WriteString("Candidate profile:\n")
 	for _, key := range []string{"full_name", "summary", "work_history", "skills", "tone_preferences"} {
 		if v := strings.TrimSpace(profile[key]); v != "" {
@@ -149,7 +226,12 @@ func buildPrompt(system string, profile map[string]string, title, company, descr
 		b.WriteString(v)
 		b.WriteString("\n")
 	}
+}
 
+// buildCoverLetterPrompt constructs system/user messages for cover letter generation.
+func buildCoverLetterPrompt(system string, profile map[string]string, title, company, description string) (string, string) {
+	var b strings.Builder
+	appendProfileSection(&b, profile)
 	b.WriteString("\nJob:\n")
 	b.WriteString("Title: ")
 	b.WriteString(title)

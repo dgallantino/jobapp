@@ -32,7 +32,7 @@ var glintsReservedJobSegments = map[string]struct{}{
 	"id":          {},
 }
 
-// GlintsAdapter scrapes Glints listing and detail pages.
+// glintsAdapter scrapes Glints listing and detail pages.
 //
 // Investigation notes (2026-08):
 // Detail pages SSR job content (h1, data-gtm-company-name, JobOverview salary,
@@ -41,29 +41,29 @@ var glintsReservedJobSegments = map[string]struct{}{
 // 403 for anonymous clients (page>=2), so listing uses chromedp, scrolls until
 // glintsMaxListingJobs, the login nudge (#see-more-jobs-login-nudge), or card
 // count stalls. Anonymous yield is typically ~30 jobs.
-type GlintsAdapter struct {
+type glintsAdapter struct {
 	Client            *Client
 	ScrapeConcurrency int // max concurrent detail fetches per listing scrape
 }
 
-// NewGlintsAdapter returns a Glints adapter using client (or NewClient defaults if nil).
+// newGlintsAdapter returns a Glints adapter using client (or NewClient defaults if nil).
 // scrapeConcurrency caps concurrent detail-page fetches (minimum 1).
-func NewGlintsAdapter(client *Client, scrapeConcurrency int) *GlintsAdapter {
+func newGlintsAdapter(client *Client, scrapeConcurrency int) *glintsAdapter {
 	if scrapeConcurrency < 1 {
 		scrapeConcurrency = 1
 	}
 	if client == nil {
 		client = NewClient(ClientOptions{})
 	}
-	return &GlintsAdapter{
+	return &glintsAdapter{
 		Client:            client,
 		ScrapeConcurrency: scrapeConcurrency,
 	}
 }
 
-func (a *GlintsAdapter) Name() string { return "glints" }
+func (a *glintsAdapter) Name() string { return "glints" }
 
-func (a *GlintsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
+func (a *glintsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, error) {
 	if isGlintsDetailURL(pageURL) {
 		doc, finalURL, err := a.Client.FetchDocument(ctx, pageURL)
 		if err != nil {
@@ -96,7 +96,7 @@ func (a *GlintsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, er
 
 // enrichListingDetails fetches each listing stub's detail page concurrently
 // and replaces stubs with full ads. On failure, keeps the listing-card fields.
-func (a *GlintsAdapter) enrichListingDetails(ctx context.Context, ads []JobAd) []JobAd {
+func (a *glintsAdapter) enrichListingDetails(ctx context.Context, ads []JobAd) []JobAd {
 	if len(ads) == 0 {
 		return ads
 	}

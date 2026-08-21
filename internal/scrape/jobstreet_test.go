@@ -246,7 +246,7 @@ func TestJobstreetAdapter_ScrapeListingEnrichesDetails(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	a := NewJobstreetAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 2)
+	a := newJobstreetAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 2)
 
 	ads, err := a.Scrape(context.Background(), srv.URL+"/id/backend-developer-jobs")
 	if err != nil {
@@ -315,7 +315,7 @@ func TestJobstreetAdapter_ScrapeListingCapsAt100(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	a := NewJobstreetAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 4)
+	a := newJobstreetAdapter(NewClient(ClientOptions{HTTP: srv.Client()}), 4)
 	ads, err := a.Scrape(context.Background(), srv.URL+"/id/developer-jobs")
 	if err != nil {
 		t.Fatalf("Scrape: %v", err)
