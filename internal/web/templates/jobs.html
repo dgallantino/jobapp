@@ -32,6 +32,7 @@
         <input type="checkbox" id="select-all" aria-label="Select all"
                onclick="document.querySelectorAll('input[name=id][form=bulk-jobs]').forEach(cb => cb.checked = this.checked)">
       </th>
+      <th class="col-expand"><span class="visually-hidden">Detail</span></th>
       <th>Title</th>
       <th>Company</th>
       <th>Salary</th>
@@ -40,11 +41,21 @@
       <th>Status</th>
     </tr>
   </thead>
-  <tbody>
-    {{range .Jobs}}
+  {{range .Jobs}}
+  <tbody class="job-entry">
     <tr>
       <td class="col-check">
         <input type="checkbox" name="id" value="{{.ID}}" form="bulk-jobs" aria-label="Select {{.Title}}">
+      </td>
+      <td class="col-expand">
+        <details class="job-expand"
+                 name="job-expand"
+                 hx-get="/jobs/{{.ID}}/description"
+                 hx-trigger="toggle once"
+                 hx-target="#job-desc-{{.ID}}"
+                 hx-swap="innerHTML">
+          <summary aria-label="Show description"></summary>
+        </details>
       </td>
       <td><a href="/jobs/{{.ID}}">{{.Title}}</a></td>
       <td>{{.Company}}</td>
@@ -61,8 +72,13 @@
         {{template "status_cell" .}}
       </td>
     </tr>
-    {{end}}
+    <tr class="job-desc-row">
+      <td colspan="8">
+        <div id="job-desc-{{.ID}}"></div>
+      </td>
+    </tr>
   </tbody>
+  {{end}}
 </table>
 {{if gt .TotalPages 1}}
 <nav class="pager" aria-label="Pagination">

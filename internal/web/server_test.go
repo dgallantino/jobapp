@@ -56,15 +56,25 @@ func authedRequest(t *testing.T, srv *Server, method, target string, body io.Rea
 
 func insertJobAd(t *testing.T, database *sql.DB, sourceURL, title, status string) {
 	t.Helper()
+	insertJobAdDesc(t, database, sourceURL, title, status, "")
+}
 
-	_, err := database.ExecContext(t.Context(), `
-		INSERT INTO job_ads (source_url, title, company, status)
-		VALUES (?, ?, 'Acme', ?)`,
-		sourceURL, title, status,
+func insertJobAdDesc(t *testing.T, database *sql.DB, sourceURL, title, status, description string) int64 {
+	t.Helper()
+
+	res, err := database.ExecContext(t.Context(), `
+		INSERT INTO job_ads (source_url, title, company, status, description)
+		VALUES (?, ?, 'Acme', ?, ?)`,
+		sourceURL, title, status, description,
 	)
 	if err != nil {
 		t.Fatalf("insert job ad: %v", err)
 	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
+	}
+	return id
 }
 
 func TestJobsListPath(t *testing.T) {
@@ -155,6 +165,70 @@ func TestHandleJobsFiltersByStatus(t *testing.T) {
 		}
 		if !strings.Contains(body, `href="/?status=all" class="active"`) {
 			t.Fatalf("expected All tab to be active")
+		}
+	})
+}
+
+func TestHandleJobsOmitsDescriptionAndIncludesExpand(t *testing.T) {
+	srv, database := testServer(t)
+	const desc = "UNIQUE_DESC_TOKEN_should_not_appear_in_listing"
+	id := insertJobAdDesc(t, database, "https://example.com/new", "New role", models.StatusNew, desc)
+
+	req := authedRequest(t, srv, "GET", "/?status=new", nil)
+	w := httptest.NewRecorder()
+	srv.routes().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if strings.Contains(body, desc) {
+		t.Fatal("listing HTML should not embed the job description")
+	}
+	wantGet := `hx-get="/jobs/` + strconv.FormatInt(id, 10) + `/description"`
+	if !strings.Contains(body, wantGet) {
+		t.Fatalf("expected expand control %s in listing HTML", wantGet)
+	}
+	if !strings.Contains(body, `class="job-expand"`) {
+		t.Fatal("expected job-expand details control in listing HTML")
+	}
+	if !strings.Contains(body, `href="/jobs/`+strconv.FormatInt(id, 10)+`"`) {
+		t.Fatal("expected title link to job detail page")
+	}
+}
+
+func TestHandleJobDescription(t *testing.T) {
+	srv, database := testServer(t)
+	const desc = "Build and ship Go services on a small team."
+	id := insertJobAdDesc(t, database, "https://example.com/new", "New role", models.StatusNew, desc)
+
+	t.Run("ok", func(t *testing.T) {
+		req := authedRequest(t, srv, "GET", "/jobs/"+strconv.FormatInt(id, 10)+"/description", nil)
+		w := httptest.NewRecorder()
+		srv.routes().ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status %d, want %d; body %s", w.Code, http.StatusOK, w.Body.String())
+		}
+		body := w.Body.String()
+		if !strings.Contains(body, desc) {
+			t.Fatalf("expected description in fragment, got %q", body)
+		}
+		if !strings.Contains(body, `class="job-body"`) {
+			t.Fatalf("expected job-body wrapper, got %q", body)
+		}
+		if strings.Contains(body, "<html") {
+			t.Fatal("fragment should not include full layout")
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		req := authedRequest(t, srv, "GET", "/jobs/999/description", nil)
+		w := httptest.NewRecorder()
+		srv.routes().ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("status %d, want %d", w.Code, http.StatusNotFound)
 		}
 	})
 }

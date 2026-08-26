@@ -96,6 +96,7 @@ func (s *Server) parseTemplates() error {
 		{"sources", []string{"templates/layout.html", "templates/sources.html"}},
 		{"source_edit", []string{"templates/layout.html", "templates/source_edit.html"}},
 		{"status_cell", []string{"templates/status_cell.html"}},
+		{"job_description", []string{"templates/job_description.html"}},
 		{"letter_partial", []string{"templates/letter_partial.html"}},
 		{"prompt_partial", []string{"templates/prompt_partial.html"}},
 	}
@@ -117,7 +118,7 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	root := "layout"
-	if name == "status_cell" || name == "letter_partial" || name == "prompt_partial" {
+	if name == "status_cell" || name == "job_description" || name == "letter_partial" || name == "prompt_partial" {
 		root = name
 	}
 	if err := t.ExecuteTemplate(w, root, data); err != nil {
@@ -136,6 +137,7 @@ func (s *Server) routes() http.Handler {
 	authed := http.NewServeMux()
 	authed.HandleFunc("GET /{$}", s.handleJobs)
 	authed.HandleFunc("GET /jobs/{id}", s.handleJobDetail)
+	authed.HandleFunc("GET /jobs/{id}/description", s.handleJobDescription)
 	authed.HandleFunc("PATCH /jobs/{id}/status", s.handleJobStatus)
 	authed.HandleFunc("POST /jobs/bulk-status", s.handleJobsBulkStatus)
 	authed.HandleFunc("POST /jobs/bulk-delete", s.handleJobsBulkDelete)
@@ -338,6 +340,20 @@ func (s *Server) handleJobDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, "job_detail", viewData{"Authed": true, "Job": job, "Letters": letters})
+}
+
+func (s *Server) handleJobDescription(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	job, err := models.GetJobAd(r.Context(), s.DB, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	s.render(w, "job_description", job)
 }
 
 func (s *Server) handleJobStatus(w http.ResponseWriter, r *http.Request) {
