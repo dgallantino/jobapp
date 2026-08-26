@@ -192,6 +192,9 @@ func TestHandleJobsOmitsDescriptionAndIncludesExpand(t *testing.T) {
 	if !strings.Contains(body, `class="job-expand"`) {
 		t.Fatal("expected job-expand details control in listing HTML")
 	}
+	if !strings.Contains(body, `scrollIntoView({ block: 'start', behavior: 'instant' })`) {
+		t.Fatal("expected job-expand open to scroll the row into view")
+	}
 	if !strings.Contains(body, `href="/jobs/`+strconv.FormatInt(id, 10)+`"`) {
 		t.Fatal("expected title link to job detail page")
 	}

@@ -28,6 +28,15 @@
     {{end}}
     {{block "content" .}}{{end}}
   </div>
+  <script>
+  document.addEventListener('toggle', (e) => {
+    const el = e.target;
+    if (!(el instanceof HTMLDetailsElement) || !el.open || !el.classList.contains('job-expand')) return;
+    requestAnimationFrame(() => {
+      el.closest('.job-entry')?.scrollIntoView({ block: 'start', behavior: 'instant' });
+    });
+  }, true);
+  </script>
 </body>
 </html>
 {{end}}
