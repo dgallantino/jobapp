@@ -39,7 +39,7 @@ func (s *Server) checkPassword(password string) bool {
 
 func (s *Server) setSession(w http.ResponseWriter) error {
 	payload := sessionPayload{
-		Exp:      time.Now().Add(1 * 24 * time.Hour).Unix(),
+		Exp:      time.Now().Add(30 * 24 * time.Hour).Unix(),
 		Instance: s.sessionInstance,
 	}
 	raw, err := json.Marshal(payload)
@@ -93,7 +93,7 @@ func (s *Server) validSession(r *http.Request) bool {
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return false
 	}
-	if payload.Instance == "" {
+	if payload.Instance == "" || payload.Instance != s.sessionInstance {
 		return false
 	}
 	return time.Now().Unix() < payload.Exp
