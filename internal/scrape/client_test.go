@@ -46,6 +46,21 @@ func TestClient_FetchBytes(t *testing.T) {
 	})
 }
 
+func TestHTTPFetchError_CloudflareChallenge(t *testing.T) {
+	h := http.Header{}
+	h.Set("Cf-Mitigated", "challenge")
+	h.Set("Server", "cloudflare")
+	body := []byte(`<title>Just a moment...</title>`)
+	err := httpFetchError(http.StatusForbidden, h, body, "https://id.jobstreet.com/")
+	if err == nil || !strings.Contains(err.Error(), "Cloudflare JS challenge") {
+		t.Fatalf("err = %v", err)
+	}
+	plain := httpFetchError(http.StatusForbidden, http.Header{}, []byte("nope"), "https://example.com/")
+	if plain == nil || strings.Contains(plain.Error(), "Cloudflare") {
+		t.Fatalf("plain err = %v", plain)
+	}
+}
+
 func TestClient_FetchDocument_UsesFetchBytes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

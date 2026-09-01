@@ -80,10 +80,6 @@ func (c *Client) FetchBytes(ctx context.Context, pageURL string) ([]byte, string
 		return nil, "", err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		return nil, "", fmt.Errorf("HTTP %d for %s", resp.StatusCode, pageURL)
-	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, "", err
@@ -92,7 +88,26 @@ func (c *Client) FetchBytes(ctx context.Context, pageURL string) ([]byte, string
 	if resp.Request != nil && resp.Request.URL != nil {
 		final = resp.Request.URL.String()
 	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, "", httpFetchError(resp.StatusCode, resp.Header, body, pageURL)
+	}
 	return body, final, nil
+}
+
+func httpFetchError(status int, h http.Header, body []byte, pageURL string) error {
+	if isCloudflareChallenge(h, body) {
+		return fmt.Errorf("HTTP %d Cloudflare JS challenge for %s (not a hard IP block)", status, pageURL)
+	}
+	return fmt.Errorf("HTTP %d for %s", status, pageURL)
+}
+
+func isCloudflareChallenge(h http.Header, body []byte) bool {
+	if strings.EqualFold(h.Get("Cf-Mitigated"), "challenge") {
+		return true
+	}
+	server := strings.ToLower(h.Get("Server"))
+	lower := strings.ToLower(string(body))
+	return strings.Contains(server, "cloudflare") && strings.Contains(lower, "just a moment")
 }
 
 // Render navigates to pageURL with headless Chromium, waits until waitReadySelector
