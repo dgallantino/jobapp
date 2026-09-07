@@ -41,7 +41,7 @@ type Options struct {
 	ScrapeConcurrency int         // max concurrent detail fetches per listing scrape
 	ChromePath        string      // Chromium/Chrome binary for chromedp (Glints listing only)
 	Limiter           Limiter     // optional per-host rate limiter for crawl outbound work
-	LLM               *llm.Client // optional; used by the Threads adapter to fill empty fields
+	LLM               *llm.Client // optional; used by Threads/Instagram adapters to fill empty fields
 }
 
 // CrawlResult summarizes one crawl pass.
@@ -74,6 +74,7 @@ func New(opts Options) *Runner {
 		newDeallsAdapter(client, opts.ScrapeConcurrency),
 		newKalibrrAdapter(client, opts.ScrapeConcurrency),
 		newThreadsAdapter(client, extractor),
+		newInstagramAdapter(client, extractor),
 	} {
 		r.byName[a.Name()] = a
 	}
@@ -119,6 +120,10 @@ func (r *Runner) resolve(rawURL string) adapter {
 		if a, ok := r.byName["threads"]; ok {
 			return a
 		}
+	case isInstagramHost(host):
+		if a, ok := r.byName["instagram"]; ok {
+			return a
+		}
 	}
 	return r.byName["static"]
 }
@@ -134,8 +139,8 @@ func (r *Runner) RunCrawl(ctx context.Context, db *sql.DB) (CrawlResult, error) 
 	res.Sources = len(sources)
 
 	for _, src := range sources {
-		if src.Adapter == "telegram" || src.Adapter == "threads" {
-			// Telegram/Threads sources are markers for link-only ingest, not crawl targets.
+		if src.Adapter == "telegram" || src.Adapter == "threads" || src.Adapter == "instagram" {
+			// Telegram/Threads/Instagram sources are markers for link-only ingest, not crawl targets.
 			continue
 		}
 		adapter, err := r.get(src.Adapter)

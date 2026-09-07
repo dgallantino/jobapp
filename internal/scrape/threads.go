@@ -78,12 +78,14 @@ func (a *threadsAdapter) Scrape(ctx context.Context, pageURL string) ([]JobAd, e
 		}
 	}
 
-	a.fillEmptyFields(ctx, &ad, caption)
+	fillEmptyJobFields(ctx, a.Extractor, &ad, caption, "threads")
 	return []JobAd{ad}, nil
 }
 
-func (a *threadsAdapter) fillEmptyFields(ctx context.Context, ad *JobAd, caption string) {
-	if a == nil || a.Extractor == nil || strings.TrimSpace(caption) == "" {
+// fillEmptyJobFields asks extractor to fill title/company/salary that regex left empty.
+// LLM errors leave regex values unchanged. caption is the original post text.
+func fillEmptyJobFields(ctx context.Context, extractor fieldExtractor, ad *JobAd, caption, logPrefix string) {
+	if extractor == nil || ad == nil || strings.TrimSpace(caption) == "" {
 		return
 	}
 	var missing []string
@@ -99,9 +101,9 @@ func (a *threadsAdapter) fillEmptyFields(ctx context.Context, ad *JobAd, caption
 	if len(missing) == 0 {
 		return
 	}
-	title, company, salary, err := a.Extractor.ExtractJobFields(ctx, caption, missing)
+	title, company, salary, err := extractor.ExtractJobFields(ctx, caption, missing)
 	if err != nil {
-		log.Printf("threads llm extract: %v", err)
+		log.Printf("%s llm extract: %v", logPrefix, err)
 		return
 	}
 	if strings.TrimSpace(ad.Title) == "" {

@@ -478,3 +478,61 @@ func TestHandleSourceUpdateRejectsThreads(t *testing.T) {
 		t.Fatalf("adapter = %q, want static", src.Adapter)
 	}
 }
+
+func TestHandleSourcesCreateRejectsInstagram(t *testing.T) {
+	srv, database := testServer(t)
+
+	form := url.Values{
+		"name":    {"Instagram board"},
+		"url":     {"https://www.instagram.com/p/AbC123xyz"},
+		"adapter": {"instagram"},
+		"enabled": {"1"},
+	}
+	req := authedRequest(t, srv, "POST", "/sources", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	srv.routes().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status %d, want %d; body %s", w.Code, http.StatusBadRequest, w.Body.String())
+	}
+
+	sources, err := models.ListSources(t.Context(), database, false)
+	if err != nil {
+		t.Fatalf("list sources: %v", err)
+	}
+	if len(sources) != 0 {
+		t.Fatalf("got %d sources, want none", len(sources))
+	}
+}
+
+func TestHandleSourceUpdateRejectsInstagram(t *testing.T) {
+	srv, database := testServer(t)
+	id, err := models.CreateSource(t.Context(), database, "Example", "https://example.com/jobs", "static", true)
+	if err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+
+	form := url.Values{
+		"name":    {"Example"},
+		"url":     {"https://example.com/jobs"},
+		"adapter": {"instagram"},
+		"enabled": {"1"},
+	}
+	req := authedRequest(t, srv, "POST", "/sources/"+strconv.FormatInt(id, 10), strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	srv.routes().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status %d, want %d; body %s", w.Code, http.StatusBadRequest, w.Body.String())
+	}
+
+	src, err := models.GetSource(t.Context(), database, id)
+	if err != nil {
+		t.Fatalf("get source: %v", err)
+	}
+	if src.Adapter != "static" {
+		t.Fatalf("adapter = %q, want static", src.Adapter)
+	}
+}
