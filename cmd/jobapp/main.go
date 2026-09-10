@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -38,6 +40,8 @@ func main() {
 		os.Exit(runCrawl(cfg, os.Args[2:]))
 	case "telegram-check":
 		os.Exit(runTelegram(cfg, os.Args[2:]))
+	case "scrape-check":
+		os.Exit(runScrapeCheck(cfg, os.Args[2:]))
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -54,6 +58,7 @@ Commands:
   serve            Run the web frontend (socket-activated or -listen)
   crawl            One crawl pass over enabled sources, then exit
   telegram-check   One Telegram short-poll pass, then exit
+  scrape-check     Scrape one URL and print ads (no database)
 
 Serve flags:
   -listen ADDR         Listen address when not socket-activated (default :8080)
@@ -65,6 +70,10 @@ Crawl flags:
   -rate-min DUR        Min delay between requests to the same host (default 2s)
   -rate-max DUR        Max delay between requests to the same host (default 5s)
                        Set both to 0 to disable rate limiting
+
+Scrape-check flags:
+  -adapter NAME        Adapter name (default: resolve from URL hostname)
+  -json                Pretty-print JSON to stdout
 
 `)
 }
@@ -154,4 +163,80 @@ func runTelegram(cfg config.Config, args []string) int {
 		log.Fatal(err)
 	}
 	return 0
+}
+
+func runScrapeCheck(cfg config.Config, args []string) int {
+	fs := flag.NewFlagSet("scrape-check", flag.ExitOnError)
+	adapter := fs.String("adapter", "", "adapter name (default: resolve from URL hostname)")
+	asJSON := fs.Bool("json", false, "pretty-print JSON to stdout")
+	fs.Usage = func() {
+		fmt.Fprintf(fs.Output(), "Usage: jobapp scrape-check [flags] URL\n")
+		fs.PrintDefaults()
+	}
+	_ = fs.Parse(args)
+	if fs.NArg() != 1 {
+		fs.Usage()
+		return 2
+	}
+	pageURL := fs.Arg(0)
+
+	runner := scrape.New(scrape.Options{
+		ScrapeConcurrency: cfg.ScrapeConcurrency,
+		ChromePath:        cfg.ChromePath,
+		LLM:               llm.NewClient(cfg.OpenRouterAPIKey, cfg.OpenRouterModel, cfg.OpenRouterSystemPrompt),
+	})
+	name, ads, err := runner.ScrapeOne(context.Background(), pageURL, *adapter)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if *asJSON {
+		if err := printScrapeJSON(os.Stdout, name, pageURL, ads); err != nil {
+			log.Fatal(err)
+		}
+		return 0
+	}
+	printScrapeText(os.Stdout, name, pageURL, ads)
+	return 0
+}
+
+type scrapeCheckOutput struct {
+	Adapter string         `json:"adapter"`
+	URL     string         `json:"url"`
+	Ads     []scrape.JobAd `json:"ads"`
+}
+
+func printScrapeJSON(w io.Writer, adapter, pageURL string, ads []scrape.JobAd) error {
+	if ads == nil {
+		ads = []scrape.JobAd{}
+	}
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(scrapeCheckOutput{
+		Adapter: adapter,
+		URL:     pageURL,
+		Ads:     ads,
+	})
+}
+
+func printScrapeText(w io.Writer, adapter, pageURL string, ads []scrape.JobAd) {
+	fmt.Fprintf(w, "adapter: %s\n", adapter)
+	fmt.Fprintf(w, "url: %s\n", pageURL)
+	if len(ads) == 0 {
+		fmt.Fprintf(w, "\n(no ads)\n")
+		return
+	}
+	for i, ad := range ads {
+		fmt.Fprintf(w, "\n--- %d/%d ---\n", i+1, len(ads))
+		fmt.Fprintf(w, "source_url: %s\n", ad.SourceURL)
+		fmt.Fprintf(w, "title: %s\n", ad.Title)
+		fmt.Fprintf(w, "company: %s\n", ad.Company)
+		fmt.Fprintf(w, "salary: %s\n", ad.Salary)
+		posted := ""
+		if ad.PostedAt != nil {
+			posted = ad.PostedAt.UTC().Format(time.RFC3339)
+		}
+		fmt.Fprintf(w, "posted_at: %s\n", posted)
+		fmt.Fprintf(w, "description:\n%s\n", ad.Description)
+	}
 }

@@ -8,6 +8,7 @@ Personal, single-user job ad scraper and cover-letter generator. One Go binary, 
 jobapp serve            # web UI (socket-activated or -listen)
 jobapp crawl            # one crawl pass, then exit
 jobapp telegram-check   # one Telegram short-poll pass, then exit
+jobapp scrape-check URL # scrape one URL to stdout (no database)
 ```
 
 ## Build
@@ -38,8 +39,8 @@ No npm/node. htmx is vendored under `internal/web/static/htmx.min.js`.
 
 set -a && source .env && set +a
 ./jobapp serve -listen :8080 -db ./jobs.db
-# Optional: exit after idle (default off). Production unit uses -idle-timeout 5m.
-# ./jobapp serve -listen :8080 -db ./jobs.db -idle-timeout 5m
+# Optional: exit after idle (default off). Production unit uses -idle-timeout 30m.
+# ./jobapp serve -listen :8080 -db ./jobs.db -idle-timeout 30m
 ```
 
 Open `http://127.0.0.1:8080`, sign in, add crawl sources under **Sources**, then:
@@ -48,56 +49,71 @@ Open `http://127.0.0.1:8080`, sign in, add crawl sources under **Sources**, then
 ./jobapp crawl -db ./jobs.db
 ```
 
-## Deploy (`/opt/jobapp`)
+## Deploy (user domain)
+
+No root. Binary in Go’s bin dir, symlink on the user `PATH`, data and config under XDG, units under `systemctl --user`.
 
 ```
-/opt/jobapp/
-├── jobapp      # binary
-├── jobs.db     # created on first run
-└── .env        # secrets (mode 600)
+$GOBIN/jobapp                          # real binary (go env GOBIN, else $GOPATH/bin)
+~/.local/bin/jobapp                    # symlink (created if needed)
+~/.local/share/jobapp/jobs.db          # SQLite (created on first run)
+~/.config/jobapp/.env                  # secrets (mode 600)
+~/.config/systemd/user/jobapp*.{service,socket,timer}
 ```
+
+Paths are detected by `./scripts/configure.sh` (env vars first: `GOBIN`, `XDG_BIN_HOME`, `XDG_DATA_HOME`, `XDG_CONFIG_HOME`) and written to `.install-paths` for the Makefile.
 
 ### Automatic install
 
 ```bash
-./scripts/configure.sh          # creates ./.env (mode 600); prompts for site password
+./scripts/configure.sh          # creates ./.env (mode 600); detects install paths; prompts for site password
 # edit ./.env — add OpenRouter / Telegram secrets
 
 make build
-sudo make install               # /opt/jobapp/jobapp, /opt/jobapp/.env, systemd units + daemon-reload
-sudo make enable                # jobapp.socket + crawl/telegram timers
+make install                    # binary, symlink, ~/.config/jobapp/.env, user units + daemon-reload
+make enable                     # jobapp.socket + crawl/telegram timers
+```
+
+If you still have a database from the old `/opt/jobapp` install:
+
+```bash
+mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/jobapp"
+cp /opt/jobapp/jobs.db "${XDG_DATA_HOME:-$HOME/.local/share}/jobapp/jobs.db"
 ```
 
 | Step | Effect |
 |------|--------|
-| `configure.sh` | Copies `.env.example` → `.env`, sets `JOBAPP_SESSION_SECRET` and `JOBAPP_PASSWORD_HASH` |
+| `configure.sh` | Copies `.env.example` → `.env`, sets `JOBAPP_SESSION_SECRET`, `JOBAPP_PASSWORD_HASH`, and `JOBAPP_DB`; writes `.install-paths` |
 | `make build` | Builds `build/jobapp` (incremental via timestamps) |
-| `sudo make install` | Installs binary + `.env` to `PREFIX` (`/opt/jobapp` by default), installs units to `/etc/systemd/system/`, runs `daemon-reload` |
-| `sudo make enable` | `systemctl enable --now` for socket + both timers |
+| `make install` | Installs the binary to the Go bin dir, symlinks into the user bin, copies `.env` to `$XDG_CONFIG_HOME/jobapp/.env`, generates user systemd units, runs `systemctl --user daemon-reload` |
+| `make enable` | `systemctl --user enable --now` for socket + both timers |
 
-`configure.sh` accepts a path — e.g. `sudo ./scripts/configure.sh /opt/jobapp/.env` — if you want secrets created directly at the install location.
+`configure.sh --paths-only` refreshes `.install-paths` without touching `.env`. `configure.sh` also accepts a path — e.g. `./scripts/configure.sh ~/.config/jobapp/.env` — if you want secrets created directly at the install location.
 
-Other Makefile targets: `make disable`, `sudo make uninstall`, `make clean`.
+Timers and the socket stop after logout unless lingering is on: `loginctl enable-linger $USER`.
+
+Other Makefile targets: `make disable`, `make uninstall`, `make clean`. Uninstall leaves `.env` and `jobs.db` in place.
 
 ### Manual install
 
 If you are not using the Makefile:
 
-1. Build and copy the binary to `/opt/jobapp/jobapp`.
-2. Copy `.env.example` → `/opt/jobapp/.env` and fill secrets.
-3. Copy unit files from `systemd/` into `/etc/systemd/system/`.
-4. Enable:
+1. Build and copy the binary to `$(go env GOBIN)` or `$(go env GOPATH)/bin`.
+2. Symlink it into `~/.local/bin` (or `$XDG_BIN_HOME`).
+3. Copy `.env.example` → `~/.config/jobapp/.env` and fill secrets; set `JOBAPP_DB` to `~/.local/share/jobapp/jobs.db`.
+4. Substitute `@JOBAPP_BIN@`, `@JOBAPP_DATADIR@`, and `@JOBAPP_ENV@` in `systemd/*.service.in`, then copy units into `~/.config/systemd/user/`.
+5. Enable:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now jobapp.socket
-sudo systemctl enable --now jobapp-crawl.timer
-sudo systemctl enable --now jobapp-telegram.timer
+systemctl --user daemon-reload
+systemctl --user enable --now jobapp.socket
+systemctl --user enable --now jobapp-crawl.timer
+systemctl --user enable --now jobapp-telegram.timer
 ```
 
 Socket activation: systemd listens on the port in `jobapp.socket`; `jobapp serve` receives the listener via fd 3 (`github.com/coreos/go-systemd/v22/activation`). For local testing without systemd, use `-listen :PORT`.
 
-The `jobapp.service` unit passes `-idle-timeout 5m`: after five minutes with no HTTP activity the process drains requests, closes SQLite, and exits. The next connection socket-activates a new process; sessions are process-scoped so you must sign in again.
+The `jobapp.service` unit passes `-idle-timeout 30m`: after thirty minutes with no HTTP activity the process drains requests, closes SQLite, and exits. The next connection socket-activates a new process; sessions are process-scoped so you must sign in again.
 
 Prefer binding the socket to a Tailscale IP so the UI is not on the public internet.
 
@@ -109,7 +125,7 @@ See [`.env.example`](.env.example). Summary:
 
 | Variable | Purpose |
 |----------|---------|
-| `JOBAPP_DB` | SQLite path (default `jobs.db`) |
+| `JOBAPP_DB` | SQLite path (cwd `jobs.db` if unset; configure/install sets `~/.local/share/jobapp/jobs.db`) |
 | `JOBAPP_LISTEN` | Dev listen address for `serve` |
 | `JOBAPP_PASSWORD_HASH` | bcrypt hash of site password |
 | `JOBAPP_SESSION_SECRET` | HMAC key for session cookie (random at deploy) |

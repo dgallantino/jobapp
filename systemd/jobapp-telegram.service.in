@@ -1,0 +1,10 @@
+[Unit]
+Description=jobapp telegram-check (one-shot short-poll)
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=@JOBAPP_DATADIR@
+EnvironmentFile=-@JOBAPP_ENV@
+ExecStart=@JOBAPP_BIN@ telegram-check -db @JOBAPP_DATADIR@/jobs.db
+Nice=10

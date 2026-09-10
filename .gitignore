@@ -9,6 +9,7 @@
 *.db
 *.db-*
 .env
+.install-paths
 
 # IDE / OS
 .idea/

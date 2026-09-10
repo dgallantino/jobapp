@@ -1,0 +1,18 @@
+[Unit]
+Description=jobapp web UI (socket-activated)
+Requires=jobapp.socket
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=@JOBAPP_DATADIR@
+EnvironmentFile=-@JOBAPP_ENV@
+ExecStart=@JOBAPP_BIN@ serve -db @JOBAPP_DATADIR@/jobs.db -idle-timeout 30m
+Restart=on-failure
+RestartSec=2
+
+# Runs only when traffic arrives on the socket (socket activation).
+
+[Install]
+WantedBy=default.target
+Also=jobapp.socket

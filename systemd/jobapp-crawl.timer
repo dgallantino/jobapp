@@ -1,6 +1,5 @@
 [Unit]
 Description=Run jobapp crawl on a schedule
-Documentation=file:///opt/jobapp/README.md
 
 [Timer]
 OnCalendar=*-*-* 20:00:00
