@@ -1,6 +1,5 @@
 [Unit]
 Description=Run jobapp telegram-check on a schedule
-Documentation=file:///opt/jobapp/README.md
 
 [Timer]
 OnCalendar=*-*-* 0/2:00:00

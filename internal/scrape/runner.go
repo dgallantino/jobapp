@@ -15,12 +15,12 @@ import (
 
 // JobAd is a scraped listing result (before DB insert).
 type JobAd struct {
-	SourceURL   string
-	Title       string
-	Company     string
-	Salary      string
-	Description string
-	PostedAt    *time.Time
+	SourceURL   string     `json:"source_url"`
+	Title       string     `json:"title"`
+	Company     string     `json:"company"`
+	Salary      string     `json:"salary"`
+	Description string     `json:"description"`
+	PostedAt    *time.Time `json:"posted_at,omitempty"`
 }
 
 // adapter scrapes a listing (or detail) URL into job ads.
@@ -121,6 +121,24 @@ func (r *Runner) resolve(rawURL string) adapter {
 		}
 	}
 	return r.byName["static"]
+}
+
+// pickAdapter returns the named adapter, or hostname resolve when adapterName is empty.
+func (r *Runner) pickAdapter(pageURL, adapterName string) (adapter, error) {
+	if name := strings.TrimSpace(adapterName); name != "" {
+		return r.get(name)
+	}
+	return r.resolve(pageURL), nil
+}
+
+// ScrapeOne scrapes pageURL with adapterName (empty = hostname resolve). No DB.
+func (r *Runner) ScrapeOne(ctx context.Context, pageURL, adapterName string) (adapter string, ads []JobAd, err error) {
+	a, err := r.pickAdapter(pageURL, adapterName)
+	if err != nil {
+		return "", nil, err
+	}
+	ads, err = a.Scrape(ctx, pageURL)
+	return a.Name(), ads, err
 }
 
 // RunCrawl loads enabled sources, scrapes each, upserts job_ads.

@@ -1,0 +1,10 @@
+[Unit]
+Description=jobapp crawl (one-shot)
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=@JOBAPP_DATADIR@
+EnvironmentFile=-@JOBAPP_ENV@
+ExecStart=@JOBAPP_BIN@ crawl -db @JOBAPP_DATADIR@/jobs.db
+Nice=10
